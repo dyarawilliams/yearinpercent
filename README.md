@@ -66,8 +66,6 @@ This repository currently ships a **technical blueprint** plus **working dry-run
 | Live X posting (OAuth) | **Not implemented** — stub only in `src/xClient.js` |
 | Scheduled automation | Example workflow only (`docs/github-actions/post.yml.example`) |
 
-Do not treat this as a production bot until live posting, secrets management, monitoring, and scheduling are finished and verified.
-
 ---
 
 ## Features
