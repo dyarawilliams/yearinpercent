@@ -1,0 +1,25 @@
+{
+  "name": "yearinpercent",
+  "version": "0.1.0",
+  "description": "An automated X bot that shares the current percentage of the year’s progress with a motivational message and visual progress bar.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dry-run": "DRY_RUN=true node src/index.js",
+    "test": "node --test tests/"
+  },
+  "keywords": [
+    "x",
+    "twitter",
+    "bot",
+    "year-progress",
+    "motivational"
+  ],
+  "author": "D'yara Williams (https://github.com/dyarawilliams)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "private": false
+}

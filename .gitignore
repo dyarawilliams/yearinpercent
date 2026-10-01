@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets — never commit real credentials
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Logs and debug
+logs/
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Build / cache
+dist/
+build/
+.cache/
+.tmp/
+
+# Optional local overrides
+config/local.json

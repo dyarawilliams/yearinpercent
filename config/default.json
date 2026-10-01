@@ -1,0 +1,14 @@
+{
+  "posting": {
+    "frequency": "daily",
+    "cronHint": "0 9 * * *",
+    "timezone": "America/New_York"
+  },
+  "progressBar": {
+    "length": 20,
+    "filledChar": "█",
+    "emptyChar": "░"
+  },
+  "dryRun": true,
+  "messageSelection": "random"
+}
