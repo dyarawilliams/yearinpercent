@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-An automated X (Twitter) bot that shares the current percentage of the year’s progress with a motivational message and a visual progress bar.
+Automated X (Twitter) bot that posts year progress as a percentage, a Unicode progress bar, and a short motivational line.
 
 > **Author / Maintainer:** [D'yara Williams](https://github.com/dyarawilliams) (`dyarawilliams`)
 
@@ -10,45 +10,18 @@ An automated X (Twitter) bot that shares the current percentage of the year’s 
 
 ## Table of contents
 
-1. [Project title](#yearinpercent)
-2. [Project description](#project-description)
-3. [Project status](#project-status)
-4. [Features](#features)
-5. [Example output](#example-output)
-6. [How it works](#how-it-works)
-7. [Architecture overview](#architecture-overview)
-8. [Year-progress calculation](#year-progress-calculation)
-9. [Progress-bar design](#progress-bar-design)
-10. [Bot personality](#bot-personality)
-11. [X API integration](#x-api-integration)
-12. [Authentication / security](#authentication--security)
-13. [Environment variables](#environment-variables)
-14. [Local development](#local-development)
-15. [Installation](#installation)
-16. [Configuration](#configuration)
-17. [Testing](#testing)
-18. [Automation / scheduling](#automation--scheduling)
-19. [Deployment considerations](#deployment-considerations)
-20. [Project structure](#project-structure)
-21. [API considerations](#api-considerations)
-22. [Error handling](#error-handling)
-23. [Future improvements](#future-improvements)
-24. [Contributing](#contributing)
-25. [License](#license)
-26. [Author / maintainer](#author--maintainer)
+1. [Project description](#project-description) · 2. [Project status](#project-status) · 3. [Features](#features) · 4. [Example output](#example-output)
+5. [How it works](#how-it-works) · 6. [Architecture](#architecture-overview) · 7. [Year-progress calculation](#year-progress-calculation) · 8. [Progress bar](#progress-bar-design)
+9. [Bot personality](#bot-personality) · 10. [X API](#x-api-integration) · 11. [Auth / security](#authentication--security) · 12. [Environment variables](#environment-variables)
+13. [Local development](#local-development) · 14. [Installation](#installation) · 15. [Configuration](#configuration) · 16. [Testing](#testing)
+17. [Automation](#automation--scheduling) · 18. [Deployment](#deployment-considerations) · 19. [Project structure](#project-structure) · 20. [API considerations](#api-considerations)
+21. [Error handling](#error-handling) · 22. [Future improvements](#future-improvements) · 23. [Contributing](#contributing) · 24. [License](#license) · 25. [Author](#author--maintainer)
 
 ---
 
 ## Project description
 
-**yearinpercent** is a small Node.js bot that:
-
-1. Calculates how far the current calendar year has progressed (continuous elapsed time ÷ total year duration × 100).
-2. Renders a Unicode progress bar that matches that percentage.
-3. Picks a short motivational line from a configurable message set.
-4. Composes a single post and (when live posting is implemented and credentials are present) publishes it to X via the X API v2.
-
-This repository currently ships a **technical blueprint** plus **working dry-run scaffolding**: year progress, progress bar, message pick, and compose run locally without calling X.
+Node.js bot that calculates year progress, renders a matching Unicode bar, picks a line from `config/messages.json`, and composes one post. Dry-run runs locally without calling X; live posting is stubbed pending OAuth.
 
 ---
 
@@ -58,60 +31,47 @@ This repository currently ships a **technical blueprint** plus **working dry-run
 
 | Area | Status |
 |------|--------|
-| Year-progress math | Implemented in `src/yearProgress.js` |
-| Progress bar | Implemented in `src/progressBar.js` |
-| Message selection | Implemented in `src/message.js` |
-| Post composition | Implemented in `src/compose.js` |
-| Dry-run entrypoint | Implemented in `src/index.js` |
-| Live X posting (OAuth) | **Not implemented** — stub only in `src/xClient.js` |
-| Scheduled automation | Example workflow only (`docs/github-actions/post.yml.example`) |
+| Year-progress math | `src/yearProgress.js` |
+| Progress bar | `src/progressBar.js` |
+| Message selection | `src/message.js` |
+| Post composition | `src/compose.js` |
+| Dry-run entrypoint | `src/index.js` |
+| Live X posting (OAuth) | **Not implemented** — stub in `src/xClient.js` |
+| Scheduled automation | Example only (`docs/github-actions/post.yml.example`) |
 
 ---
 
 ## Features
 
-- Continuous year-progress percentage (2 decimal places)
-- Leap-year aware (duration from Jan 1 → next Jan 1; no hard-coded year)
-- Visual progress bar (`█` / `░`) consistent with the rounded percentage
-- Rotating motivational messages (not the same line every time)
-- Dry-run mode by default (safe local preview)
-- Config-driven bar length, characters, timezone hints, and posting frequency metadata
-- Example GitHub Actions schedule (disabled / commented) for future automation
-- MIT licensed open source
+- Continuous year % (2 decimals); leap-year aware (Jan 1 → next Jan 1)
+- Progress bar (`█` / `░`) aligned with the rounded percent
+- Rotating motivational messages; dry-run by default
+- Config for bar, timezone hints, posting metadata
+- Example GitHub Actions schedule (disabled) under `docs/github-actions/`
+- MIT licensed
 
 ---
 
 ## Example output
 
-Conceptual post format (exact percent and message vary):
-
 ```text
 2026 is 75.34% complete
 ███████████████░░░░░ 75.34%
 Keep going — every percent counts.
 ```
 
-Dry-run console output looks like:
-
-```text
-=== yearinpercent dry-run ===
-2026 is 75.34% complete
-███████████████░░░░░ 75.34%
-Keep going — every percent counts.
-=============================
-DRY_RUN: post was composed but not sent to X.
-```
+Dry-run wraps the same body with `=== yearinpercent dry-run ===` and `DRY_RUN: post was composed but not sent to X.`
 
 ---
 
 ## How it works
 
-1. **Clock** — Use the current time in the desired timezone context (runtime `TZ` / host clock).
-2. **Progress** — Compute `elapsedMs / totalYearDurationMs * 100`, round to 2 decimals.
-3. **Bar** — Map that same rounded percent onto a fixed-length bar.
-4. **Message** — Randomly (or otherwise) select a template from `config/messages.json`.
-5. **Compose** — Join percent headline + bar line + message into one post body.
-6. **Publish** — In dry-run, print the body. Live path (future): `POST https://api.x.com/2/tweets` with user-context OAuth.
+1. **Clock** — Current time (`TZ` / host).
+2. **Progress** — `elapsedMs / totalYearDurationMs * 100`, round to 2 decimals.
+3. **Bar** — Map that percent onto a fixed-length bar.
+4. **Message** — Select from `config/messages.json`.
+5. **Compose** — Headline + bar + message.
+6. **Publish** — Dry-run prints; live (future): `POST https://api.x.com/2/tweets` with user-context OAuth.
 
 ---
 
@@ -128,33 +88,20 @@ DRY_RUN: post was composed but not sent to X.
                                  │         └─────────────┬─────────────┘
                                  ▼                       ▼
                           xClient.createPost()    composed text
-                          (dry-run or future
-                           OAuth 1.0a POST)
+                          (dry-run or future OAuth 1.0a POST)
 ```
 
-Modules are intentionally small and side-effect light so they are easy to unit test and to swap scheduling hosts later.
+Small, side-effect-light modules for easy tests and host swaps.
 
 ---
 
 ## Year-progress calculation
 
-**Formula (continuous, not day-bucketed):**
-
 ```text
 percent = (elapsedTimeMs / totalYearDurationMs) * 100
 ```
 
-Then round to **exactly two decimal places** (e.g. `75.34`).
-
-**Rules:**
-
-- **No hard-coded year** — derive the year from the evaluation timestamp (`now`).
-- **Year bounds** — `start = Jan 1 00:00:00.000` of that year; `end = Jan 1 00:00:00.000` of the next year.
-- **Leap years** — `totalYearDurationMs` automatically includes Feb 29 when the year has 366 days.
-- **Year boundaries** — each run recomputes from the current year, so Dec 31 → Jan 1 rolls cleanly without special cases beyond clamping elapsed time into `[0, totalMs]`.
-- **Label** — always format with `toFixed(2)` (including `0.00` and `100.00`).
-
-Reference implementation: `src/yearProgress.js`.
+Round to **two decimals** (e.g. `75.34`). Year from `now` (no hard-coded year). Bounds: Jan 1 00:00:00.000 → next Jan 1 (leap years included). Clamp elapsed to `[0, totalMs]`; label with `toFixed(2)`. See `src/yearProgress.js`.
 
 ---
 
@@ -162,31 +109,17 @@ Reference implementation: `src/yearProgress.js`.
 
 | Setting | Default | Notes |
 |---------|---------|--------|
-| Length | `20` | Configurable in `config/default.json` |
-| Filled char | `█` | U+2588 FULL BLOCK |
-| Empty char | `░` | U+2591 LIGHT SHADE |
+| Length | `20` | `config/default.json` |
+| Filled | `█` | U+2588 FULL BLOCK |
+| Empty | `░` | U+2591 LIGHT SHADE |
 
-**Rounding consistency:** filled segment count is `round((percent / 100) * length)` using the **same** rounded percentage shown in the post, so the bar and the numeric label do not disagree.
-
-Example at 50% with length 20:
-
-```text
-██████████░░░░░░░░░░
-```
-
-Reference implementation: `src/progressBar.js`.
+Filled count: `round((percent / 100) * length)` using the **same** rounded percent as the label. Example at 50%, length 20: `██████████░░░░░░░░░░`. See `src/progressBar.js`.
 
 ---
 
 ## Bot personality
 
-Tone: **motivational, brief, encouraging** — not spammy, not preachy.
-
-- Messages live in `config/messages.json` as a **template collection**.
-- Selection should vary across posts (default: random) so the bot is not stuck on one line.
-- README / config samples are **tone examples only**; replace them to match your brand voice.
-
-Examples (tone only):
+Motivational, brief, encouraging. Templates in `config/messages.json` (default: random). Samples are tone examples — replace to match your voice.
 
 - “Keep going — every percent counts.”
 - “Small steps stack up. This year is still yours.”
@@ -196,37 +129,23 @@ Examples (tone only):
 
 ## X API integration
 
-Based on the current **X API v2** manage-Posts quickstart (confirm details in the official docs; tiers and pricing change).
-
 | Item | Detail |
 |------|--------|
-| Create Post endpoint | `POST https://api.x.com/2/tweets` |
-| Auth required | **User Context** — OAuth 1.0a (API key/secret + access token/secret) **or** OAuth 2.0 Authorization Code with PKCE (user access token) |
+| Endpoint | `POST https://api.x.com/2/tweets` |
+| Auth | **User context** — OAuth 1.0a (API key/secret + access token/secret) **or** OAuth 2.0 Authorization Code with PKCE |
 | App-only bearer | **Cannot** create posts |
-| Body | JSON with at least `text` (or media) |
-| Developer setup | Developer account → Project → App with **read and write** permissions |
+| Body | JSON with at least `text` |
+| App setup | Developer account → Project → App with **read and write** |
 
-**Official docs:**
+Docs: [Manage Posts quickstart](https://docs.x.com/x-api/posts/manage-tweets/quickstart) · [Developer Portal](https://developer.x.com/)
 
-- Manage Posts quickstart: [https://docs.x.com/x-api/posts/manage-tweets/quickstart](https://docs.x.com/x-api/posts/manage-tweets/quickstart)
-- Developer Portal: [https://developer.x.com/](https://developer.x.com/)
-
-**For a scheduled bot**, OAuth 1.0a user tokens are the practical default (long-lived). OAuth 2.0 + refresh tokens is a documented alternative if you prefer that flow.
-
-**Rate limits:** vary by API access tier. Monitor response headers `x-rate-limit-remaining` and `x-rate-limit-reset`. On HTTP `429`, back off and retry according to reset timing. **Confirm current tier and rate limits in the Developer Portal** — they change over time.
-
-Live HTTP posting is **not** implemented in this blueprint; see `src/xClient.js`.
+OAuth 1.0a user tokens suit scheduled bots. Rate limits vary by tier — watch `x-rate-limit-remaining` / `x-rate-limit-reset`; back off on `429`. Live HTTP posting is stubbed in `src/xClient.js`.
 
 ---
 
 ## Authentication / security
 
-- **Never commit** API keys, tokens, secrets, or `.env` files.
-- Use `.env` locally (gitignored) and GitHub Actions **encrypted secrets** (or your host’s secret store) in CI.
-- Grant the X app **read and write** only if you intend to post; review app permissions in the Developer Portal.
-- Prefer least privilege on the GitHub side (workflow permissions, environment protection rules).
-- App-only / bearer tokens are insufficient for posting; do not rely on `X_BEARER_TOKEN` alone.
-- Rotate credentials if they leak; revoke old tokens in the Developer Portal.
+Never commit keys, tokens, or `.env`. Use `.env` locally (gitignored) and encrypted secrets in CI. App needs **read and write** to post; `X_BEARER_TOKEN` alone is not enough. Prefer least privilege on GitHub. Rotate/revoke leaked credentials in the Developer Portal.
 
 ---
 
@@ -239,96 +158,84 @@ Live HTTP posting is **not** implemented in this blueprint; see `src/xClient.js`
 | `X_ACCESS_TOKEN` | Yes (OAuth 1.0a) | User access token |
 | `X_ACCESS_TOKEN_SECRET` | Yes (OAuth 1.0a) | User access token secret |
 | `X_BEARER_TOKEN` | No | Optional; **not sufficient alone for posting** |
-| `DRY_RUN` | No (default `true`) | When not `false`, compose only — do not call X |
-| `TZ` | No | Timezone for local clock behavior (e.g. `America/New_York`) |
+| `DRY_RUN` | No (default `true`) | Unless `false`, compose only — do not call X |
+| `TZ` | No | Timezone (e.g. `America/New_York`) |
 
-See `.env.example` for placeholders. **Do not invent or commit real credentials.**
+See `.env.example`. Do not commit real credentials.
 
 ---
 
 ## Local development
 
-Requirements: **Node.js 18+**.
+Requires **Node.js 18+**.
 
 ```bash
 git clone https://github.com/dyarawilliams/yearinpercent.git
 cd yearinpercent
-cp .env.example .env   # leave DRY_RUN=true; fill secrets only when implementing live post
+cp .env.example .env   # leave DRY_RUN=true
+npm install
 npm test
 npm run dry-run        # or: node src/index.js
 ```
 
-Expected dry-run: printed composed post, no network call to X.
+Dry-run prints the composed post with no network call to X.
 
 ---
 
 ## Installation
 
 ```bash
-npm install   # no runtime dependencies required for the current scaffold
+npm install
 ```
 
-This blueprint uses the Node.js built-in test runner (`node --test`) and ES modules. Add HTTP/OAuth libraries later when implementing live posting (for example an OAuth 1.0a signing helper).
+No runtime dependencies in the current scaffold. Uses Node’s built-in test runner (`node --test`) and ES modules. Add an OAuth 1.0a signing helper when implementing live posting.
 
 ---
 
 ## Configuration
 
-Primary knobs:
-
 | Concern | Where |
 |---------|--------|
 | Posting frequency / cron hint | `config/default.json` → `posting` |
-| Timezone hint | `config/default.json` → `posting.timezone` and/or env `TZ` |
+| Timezone hint | `config/default.json` → `posting.timezone` and/or `TZ` |
 | Bar length / characters | `config/default.json` → `progressBar` |
-| Dry-run default | `config/default.json` → `dryRun` and env `DRY_RUN` |
+| Dry-run default | `config/default.json` → `dryRun` and `DRY_RUN` |
 | Motivational lines | `config/messages.json` |
 
-Adjust frequency to match your X access tier and audience expectations (daily is a reasonable default; confirm rate limits first).
+Match frequency to your X access tier (daily is a reasonable default).
 
 ---
 
 ## Testing
 
-Run:
-
 ```bash
 npm test
 ```
 
-**Recommended cases** (several already covered under `tests/`):
-
 | Area | Cases |
 |------|--------|
-| Year progress | Leap vs non-leap total duration; start / mid / end of year; `0.00%`; near-`100.00%`; 2-decimal rounding; no hard-coded year |
-| Progress bar | Empty / full / mid; custom chars; clamp out-of-range; length consistency with percent |
+| Year progress | Leap vs non-leap; start / mid / end; `0.00%` / near-`100.00%`; 2-decimal rounding; no hard-coded year |
+| Progress bar | Empty / full / mid; custom chars; clamp; length vs percent |
 | Messages | Load templates; deterministic pick with injected RNG; empty fallback |
-| Compose | Headline + bar + message wiring; percent label appears in text |
-| API / auth (future) | Missing secrets throw; dry-run never calls network; HTTP 429 backoff |
+| Compose | Headline + bar + message; percent in text |
+| API / auth (future) | Missing secrets throw; dry-run never networks; HTTP 429 backoff |
 | Dry-run | `node src/index.js` prints only |
 
 ---
 
 ## Automation / scheduling
 
-This project does **not** lock you into one host. Reasonable options:
+1. **GitHub Actions** — `docs/github-actions/post.yml.example` (commented, not enabled)
+2. **Serverless cron** — EventBridge + Lambda, Cloud Scheduler, etc.
+3. **Cloud worker / VPS** — Workers cron, Fly.io, system cron
 
-1. **GitHub Actions** — scheduled workflow (see `docs/github-actions/post.yml.example`; fully commented, not enabled).
-2. **Serverless cron** — AWS EventBridge + Lambda, Google Cloud Scheduler, etc.
-3. **Cloud worker** — Cloudflare Workers cron triggers, Fly.io machines, a small always-on VPS with system cron.
-
-**Recommendation:** start with GitHub Actions + `workflow_dispatch` + `DRY_RUN=true` for visibility, then enable schedule only after live posting and secrets are verified. Adjust cron for timezone / DST explicitly.
+Start with Actions + `workflow_dispatch` + `DRY_RUN=true`; enable schedule after live posting and secrets are verified.
 
 ---
 
 ## Deployment considerations
 
-- Keep secrets out of the repo and out of logs.
-- Default to dry-run in new environments.
-- Pin Node version in CI.
-- Monitor X API errors, rate-limit headers, and failed workflow runs.
-- Confirm your **current** X API access tier and pricing in the [Developer Portal](https://developer.x.com/) before enabling a frequent schedule.
-- Respect X Automation / platform rules and applicable local laws.
+Secrets out of repo and logs; default dry-run in new environments. Pin Node in CI; monitor X errors, rate-limit headers, and failed runs. Confirm current X API tier/pricing in the [Developer Portal](https://developer.x.com/) before a frequent schedule. Follow X Automation rules and applicable law.
 
 ---
 
@@ -336,11 +243,7 @@ This project does **not** lock you into one host. Reasonable options:
 
 ```text
 yearinpercent/
-  README.md
-  LICENSE
-  .gitignore
-  .env.example
-  package.json
+  README.md  LICENSE  .gitignore  .env.example  package.json
   config/
     default.json          # frequency, bar, timezone, dryRun
     messages.json         # motivational templates
@@ -350,31 +253,19 @@ yearinpercent/
     progressBar.js        # █ / ░ bar
     message.js            # template picker
     compose.js            # wires percent + bar + message
-    xClient.js            # OAuth posting stub (dry-run / throws if live)
-  tests/
-    yearProgress.test.js
-    progressBar.test.js
-    message.test.js
-    compose.test.js
-  docs/
-    github-actions/
-      post.yml.example    # commented schedule example — copy to .github/workflows/post.yml when ready
+    xClient.js            # OAuth posting stub
+  tests/                  # yearProgress, progressBar, message, compose
+  docs/github-actions/
+    post.yml.example      # commented schedule — copy to .github/workflows/ when ready
 ```
 
-> **Note:** An example workflow also belongs under `.github/workflows/` when enabling automation. Pushing files into `.github/workflows/` requires a GitHub token with the `workflow` scope; this scaffold keeps the example under `docs/github-actions/` so the initial commit can be pushed with standard `repo` scope. Copy/rename into `.github/workflows/` once that permission is available — and keep it disabled until secrets exist.
-
+The workflow example lives under `docs/github-actions/` (pushing to `.github/workflows/` needs the `workflow` scope); copy it there when that permission is available.
 
 ---
 
 ## API considerations
 
-- Endpoint: `POST https://api.x.com/2/tweets` with JSON `{ "text": "..." }`.
-- User-context auth only for create; bearer/app-only is not enough.
-- OAuth 1.0a user tokens suit unattended bots; document OAuth 2.0 + refresh if you choose that path later.
-- Text length must fit X’s post limits (validate before send).
-- Idempotency: scheduled jobs can double-fire — consider “already posted today” guards later.
-- Tier/rate limits and pricing change — **verify in the Developer Portal**, and handle `429` with backoff using `x-rate-limit-*` headers.
-- Docs: [Manage Tweets quickstart](https://docs.x.com/x-api/posts/manage-tweets/quickstart) · [Developer Portal](https://developer.x.com/).
+See [X API integration](#x-api-integration). For a live bot: validate text length against X limits; guard against double-fire (“already posted today”); verify tier/rate limits in the Developer Portal and handle `429` via `x-rate-limit-*` headers.
 
 ---
 
@@ -382,54 +273,49 @@ yearinpercent/
 
 | Situation | Expected behavior |
 |-----------|-------------------|
-| Missing OAuth secrets on live path | Throw a clear error listing missing env var names |
+| Missing OAuth secrets (live) | Throw listing missing env var names |
 | `DRY_RUN=true` | Never call X; print composed post |
-| Live posting not implemented | Throw explicit “not implemented” after credential check |
-| HTTP 429 (future) | Back off until `x-rate-limit-reset`; avoid tight retry loops |
-| HTTP 4xx/5xx (future) | Log status/body safely (no secrets); fail the job |
-| Invalid config / empty messages | Fall back to safe defaults where possible |
+| Live posting not implemented | Throw “not implemented” after credential check |
+| HTTP 429 (future) | Back off until `x-rate-limit-reset` |
+| HTTP 4xx/5xx (future) | Log status/body without secrets; fail the job |
+| Invalid config / empty messages | Safe defaults where possible |
 
-Avoid logging raw tokens or full `.env` contents.
+Never log raw tokens or full `.env` contents.
 
 ---
 
 ## Future improvements
 
-- Implement OAuth 1.0a signed `POST /2/tweets`
-- Optional OAuth 2.0 PKCE + refresh-token path
-- “Already posted today” deduplication
-- Media / branded progress-bar images
-- Richer message templates (time-of-year aware)
-- Metrics / alerting on failed posts
-- Multi-timezone or locale variants
-- Harden CI with a real (non-example) workflow once secrets exist
+- OAuth 1.0a signed `POST /2/tweets`; optional OAuth 2.0 PKCE + refresh
+- “Already posted today” deduplication; media / branded bar images
+- Time-of-year templates; metrics on failed posts; multi-timezone / locale
+- Real CI workflow once secrets exist
 
 ---
 
 ## Contributing
 
-Contributions that improve calculation accuracy, tests, docs, or safe automation are welcome.
+Improvements to calculation accuracy, tests, docs, or safe automation are welcome.
 
-1. Fork the repo and create a feature branch.
+1. Fork and create a feature branch.
 2. Keep secrets out of commits.
 3. Add/adjust tests for behavior changes.
-4. Open a pull request describing the change.
+4. Open a PR describing the change.
 
-By contributing, you agree your work is licensed under the MIT License.
+Contributions are licensed under MIT.
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License** — see [LICENSE](./LICENSE).
+**MIT License** — see [LICENSE](./LICENSE).
 
 ---
 
 ## Author / maintainer
 
-**D'yara Williams**  
-GitHub: [dyarawilliams](https://github.com/dyarawilliams)
+**D'yara Williams** · GitHub: [dyarawilliams](https://github.com/dyarawilliams)
 
 ---
 
-*Blueprint scaffold — dry-run composition works today; live X posting is intentionally left for a follow-up implementation once Developer Portal credentials and app write permissions are in place.*
+*Blueprint scaffold — dry-run works today; live X posting is a follow-up once Developer Portal credentials and write permissions are in place.*
