@@ -1,11 +1,15 @@
 /**
  * yearinpercent — entry point (dry-run by default).
  * Composes a year-progress post and prints it. Does not call X unless
- * DRY_RUN=false and live posting is implemented.
+ * DRY_RUN=false and live posting is implemented. `--dry-run` forces dry-run.
  */
 
 import { composePost } from './compose.js';
 import { createPost } from './xClient.js';
+
+if (process.argv.includes('--dry-run')) {
+  process.env.DRY_RUN = 'true';
+}
 
 async function main() {
   const composed = composePost();

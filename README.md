@@ -10,12 +10,28 @@ Automated X (Twitter) bot that posts year progress as a percentage, a Unicode pr
 
 ## Table of contents
 
-1. [Project description](#project-description) · 2. [Project status](#project-status) · 3. [Features](#features) · 4. [Example output](#example-output)
-5. [How it works](#how-it-works) · 6. [Architecture](#architecture-overview) · 7. [Year-progress calculation](#year-progress-calculation) · 8. [Progress bar](#progress-bar-design)
-9. [Bot personality](#bot-personality) · 10. [X API](#x-api-integration) · 11. [Auth / security](#authentication--security) · 12. [Environment variables](#environment-variables)
-13. [Local development](#local-development) · 14. [Installation](#installation) · 15. [Configuration](#configuration) · 16. [Testing](#testing)
-17. [Automation](#automation--scheduling) · 18. [Deployment](#deployment-considerations) · 19. [Project structure](#project-structure) · 20. [API considerations](#api-considerations)
-21. [Error handling](#error-handling) · 22. [Future improvements](#future-improvements) · 23. [Contributing](#contributing) · 24. [License](#license) · 25. [Author](#author--maintainer)
+- [Project description](#project-description)
+- [Project status](#project-status)
+- [Features](#features)
+- [Example output](#example-output)
+- [How it works](#how-it-works)
+- [Architecture overview](#architecture-overview)
+- [Year-progress calculation](#year-progress-calculation)
+- [Progress-bar design](#progress-bar-design)
+- [Bot personality](#bot-personality)
+- [X API integration](#x-api-integration)
+- [Authentication / security](#authentication--security)
+- [Environment variables](#environment-variables)
+- [Local development](#local-development)
+- [Configuration](#configuration)
+- [Testing](#testing)
+- [Automation / scheduling](#automation--scheduling)
+- [Project structure](#project-structure)
+- [Error handling](#error-handling)
+- [Future improvements](#future-improvements)
+- [Contributing](#contributing)
+- [License](#license)
+- [Author / maintainer](#author--maintainer)
 
 ---
 
@@ -145,6 +161,11 @@ Docs: [Manage Posts quickstart](https://docs.x.com/x-api/posts/manage-tweets/qui
 
 OAuth 1.0a user tokens suit scheduled bots. Rate limits vary by tier — watch `x-rate-limit-remaining` / `x-rate-limit-reset`; back off on `429`. Live HTTP posting is stubbed in `src/xClient.js`.
 
+**For a live bot:**
+- Validate text length against X limits
+- Guard against double-fire (“already posted today”)
+- Verify tier/pricing and rate limits in the Developer Portal before a frequent schedule
+
 ---
 
 ## Authentication / security
@@ -179,20 +200,10 @@ cd yearinpercent
 cp .env.example .env   # leave DRY_RUN=true
 npm install
 npm test
-npm run dry-run        # or: node src/index.js
+npm run dry-run        # node src/index.js --dry-run (works on macOS, Linux, Windows)
 ```
 
-Dry-run prints the composed post with no network call to X.
-
----
-
-## Installation
-
-```bash
-npm install
-```
-
-No runtime dependencies in the current scaffold. Uses Node’s built-in test runner (`node --test`) and ES modules. Add an OAuth 1.0a signing helper when implementing live posting.
+`--dry-run` forces dry-run regardless of `DRY_RUN`; it prints the composed post with no network call to X. No runtime dependencies yet — uses Node’s built-in test runner (`node --test`) and ES modules. Add an OAuth 1.0a signing helper when implementing live posting.
 
 ---
 
@@ -223,7 +234,7 @@ npm test
 | Messages | Load templates; deterministic pick with injected RNG; empty fallback |
 | Compose | Headline + bar + message; percent in text |
 | API / auth (future) | Missing secrets throw; dry-run never networks; HTTP 429 backoff |
-| Dry-run | `node src/index.js` prints only |
+| Dry-run | `--dry-run` flag forces dry-run even with `DRY_RUN=false`; prints only |
 
 ---
 
@@ -235,11 +246,7 @@ npm test
 
 Start with Actions + `workflow_dispatch` + `DRY_RUN=true`; enable schedule after live posting and secrets are verified.
 
----
-
-## Deployment considerations
-
-Secrets out of repo and logs; default dry-run in new environments. Pin Node in CI; monitor X errors, rate-limit headers, and failed runs. Confirm current X API tier/pricing in the [Developer Portal](https://developer.x.com/) before a frequent schedule. Follow X Automation rules and applicable law.
+**Deployment:** default to dry-run in new environments; pin Node in CI; monitor X errors, rate-limit headers, and failed runs. Follow X Automation rules and applicable law.
 
 ---
 
@@ -264,12 +271,6 @@ yearinpercent/
 ```
 
 The workflow example lives under `docs/github-actions/` (pushing to `.github/workflows/` needs the `workflow` scope); copy it there when that permission is available.
-
----
-
-## API considerations
-
-See [X API integration](#x-api-integration). For a live bot: validate text length against X limits; guard against double-fire (“already posted today”); verify tier/rate limits in the Developer Portal and handle `429` via `x-rate-limit-*` headers.
 
 ---
 
