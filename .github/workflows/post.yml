@@ -1,0 +1,35 @@
+# Ready-to-use workflow. To enable: copy this file to .github/workflows/post.yml
+# (GitHub web UI → Add file → Create new file), then add these repository secrets
+# under Settings → Secrets and variables → Actions:
+#   X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET
+
+name: yearinpercent monthly post
+
+on:
+  schedule:
+    # 1st of each month, 14:07 UTC ≈ 10:07 AM ET (EDT); 9:07 AM ET in winter (EST)
+    - cron: '7 14 1 * *'
+  workflow_dispatch:
+
+concurrency:
+  group: yearinpercent-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm test
+      - name: Post to X
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          BOT_TIMEZONE: America/New_York
+        run: npm run post
