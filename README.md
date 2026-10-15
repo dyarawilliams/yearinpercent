@@ -103,7 +103,7 @@ percent = (elapsedTimeMs / totalYearDurationMs) * 100
 
 Round to **two decimals** (e.g. `75.34`); label with `toFixed(2)`. Year from `now` (no hard-coded year). See `src/yearProgress.js`.
 
-- **Bounds:** Jan 1 00:00 → next Jan 1 00:00 **local time in one IANA timezone** (leap years and DST handled). Timezone precedence: `BOT_TIMEZONE` env → `posting.timezone` in `config/default.json` → `UTC`. The host `TZ` is ignored. Example: at 2026-01-01 02:00 UTC it's 2026 at 0.01% in UTC but still 2025 at 99.97% in `America/New_York`.
+- **Bounds:** Jan 1 00:00 → next Jan 1 00:00 **local time in one IANA timezone** (leap years and DST handled). Timezone precedence: `BOT_TIMEZONE` env → `posting.timezone` in `config/default.json` → `UTC`. The host `TZ` is ignored. Example: at 2026-01-01 02:00 UTC it's 2026 at 0.02% in UTC but still 2025 at 99.97% in `America/New_York`.
 - **0.00%:** exactly Jan 1 00:00 in the configured zone.
 - **100.00%:** elapsed is clamped to `[0, total)`, so next Jan 1 00:00 is 0.00% of the new year. Rounding shows `100.00%` once ≤ 0.005% of the year remains — the last **26 min 16.8 s** of Dec 31 (365-day year) or **26 min 21.12 s** (leap year). This is intended.
 
