@@ -1,42 +1,35 @@
-# EXAMPLE scheduled workflow — do NOT enable live posting without secrets.
-# Rename to post.yml and configure repository secrets only when ready.
-#
-# Required GitHub Actions secrets (never commit these):
-#   X_API_KEY
-#   X_API_SECRET
-#   X_ACCESS_TOKEN
-#   X_ACCESS_TOKEN_SECRET
-#
-# Start with DRY_RUN=true until you have verified composition + auth.
+# Ready-to-use workflow. To enable: copy this file to .github/workflows/post.yml
+# (GitHub web UI → Add file → Create new file), then add these repository secrets
+# under Settings → Secrets and variables → Actions:
+#   X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET
 
-# name: yearinpercent daily post
-#
-# on:
-#   schedule:
-#     # 09:00 America/New_York ≈ 13:00 UTC (adjust for DST as needed)
-#     - cron: '0 13 * * *'
-#   workflow_dispatch:
-#
-# jobs:
-#   post:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - uses: actions/checkout@v4
-#       - uses: actions/setup-node@v4
-#         with:
-#           node-version: '20'
-#       - name: Dry-run compose (safe default)
-#         env:
-#           DRY_RUN: 'true'
-#           TZ: America/New_York
-#         run: node src/index.js
-#       # Uncomment only after live posting is implemented and secrets are set:
-#       # - name: Post to X
-#       #   env:
-#       #     DRY_RUN: 'false'
-#       #     X_API_KEY: ${{ secrets.X_API_KEY }}
-#       #     X_API_SECRET: ${{ secrets.X_API_SECRET }}
-#       #     X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
-#       #     X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
-#       #     TZ: America/New_York
-#       #   run: node src/index.js
+name: yearinpercent daily post
+
+on:
+  schedule:
+    # 14:07 UTC ≈ 10:07 AM ET (EDT); 9:07 AM ET in winter (EST)
+    - cron: '7 14 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: yearinpercent-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm test
+      - name: Post to X
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          BOT_TIMEZONE: America/New_York
+        run: npm run post

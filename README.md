@@ -30,9 +30,7 @@ Automated X (Twitter) bot that posts year progress as a percentage, a Unicode pr
 
 ## Overview
 
-Node.js bot that calculates year progress, renders a matching Unicode bar, picks a line from `config/messages.json`, and composes one post. Dry-run runs locally without calling X; live posting is stubbed pending OAuth.
-
-**Early / blueprint — not production.**
+Node.js bot that calculates year progress, renders a matching Unicode bar, picks a line from `config/messages.json`, and composes one post. Dry-run is the default; `npm run post` publishes to X via OAuth 1.0a.
 
 | Area | Status |
 |------|--------|
@@ -41,15 +39,14 @@ Node.js bot that calculates year progress, renders a matching Unicode bar, picks
 | Message selection | `src/message.js` |
 | Post composition | `src/compose.js` |
 | Dry-run entrypoint | `src/index.js` |
-| Live X posting (OAuth) | **Not implemented** — stub in `src/xClient.js` |
-| Scheduled automation | Example only (`docs/github-actions/post.yml.example`) |
+| Live X posting (OAuth 1.0a) | `src/xClient.js` — implemented, tested with mocked API |
+| Scheduled automation | Ready workflow in `docs/github-actions/post.yml.example` — copy to enable |
 
 ### Roadmap
 
-- OAuth 1.0a signed `POST /2/tweets`; optional OAuth 2.0 PKCE + refresh
+- Optional OAuth 2.0 PKCE + refresh
 - “Already posted today” deduplication; media / branded bar images
 - Time-of-year templates; metrics on failed posts; multi-timezone / locale
-- Real CI workflow once secrets exist
 
 ---
 
@@ -153,10 +150,9 @@ Motivational, brief, encouraging. Templates in `config/messages.json` (default: 
 
 Docs: [Manage Posts quickstart](https://docs.x.com/x-api/posts/manage-tweets/quickstart) · [Developer Portal](https://developer.x.com/)
 
-OAuth 1.0a user tokens suit scheduled bots. Rate limits vary by tier — watch `x-rate-limit-remaining` / `x-rate-limit-reset`; back off on `429`. Live HTTP posting is stubbed in `src/xClient.js`.
+**Status: implemented.** `src/xClient.js` signs requests with OAuth 1.0a HMAC-SHA1 (`node:crypto`, no dependencies) and sends `{"text"}` via `fetch`. Posts over 280 characters are rejected before sending. On success it logs the post id. On `429` it logs when the limit resets (`x-rate-limit-reset`) and retries once only if that's within ~60 s; otherwise it exits nonzero.
 
 **For a live bot:**
-- Validate text length against X limits
 - Guard against double-fire (“already posted today”)
 - Verify tier/pricing and rate limits in the Developer Portal before a frequent schedule
 
@@ -213,7 +209,9 @@ npm test
 npm run dry-run        # node src/index.js --dry-run (works on macOS, Linux, Windows)
 ```
 
-`--dry-run` forces dry-run regardless of `DRY_RUN`; it prints the composed post with no network call to X. No runtime dependencies yet — uses Node’s built-in test runner (`node --test`) and ES modules. Add an OAuth 1.0a signing helper when implementing live posting.
+`--dry-run` forces dry-run regardless of `DRY_RUN`, with no network call to X. No runtime dependencies.
+
+**Real test post:** put your four `X_*` keys in `.env` (loaded automatically; existing env vars win), then run `npm run post` (`node src/index.js --live`). It prints the new post id. `--dry-run` still wins if both flags are passed.
 
 ---
 
@@ -229,7 +227,7 @@ npm test
 | Progress bar | Empty / full / mid; custom chars; clamp; length vs percent |
 | Messages | Load templates; deterministic pick with injected RNG; empty fallback |
 | Compose | Headline + bar + message; percent in text |
-| API / auth (future) | Missing secrets throw; dry-run never networks; HTTP 429 backoff |
+| API / auth | OAuth signature vs. documented example; missing secrets; dry-run never calls fetch; success id; 401; 429 (no retry / one bounded retry); 500; text > 280 |
 | Dry-run | `--dry-run` flag forces dry-run even with `DRY_RUN=false`; prints only |
 
 ### Error handling
@@ -238,9 +236,10 @@ npm test
 |-----------|-------------------|
 | Missing OAuth secrets (live) | Throw listing missing env var names |
 | `DRY_RUN=true` | Never call X; print composed post |
-| Live posting not implemented | Throw “not implemented” after credential check |
-| HTTP 429 (future) | Back off until `x-rate-limit-reset` |
-| HTTP 4xx/5xx (future) | Log status/body without secrets; fail the job |
+| Text > 280 characters | Throw before sending |
+| HTTP 401/403 | Auth error with hint: Read and write permission, regenerate access token |
+| HTTP 429 | Log reset time; one retry only if reset ≤ ~60 s, else exit nonzero |
+| Other 4xx/5xx | Log status + response body (never headers/secrets); exit nonzero |
 | Invalid config / empty messages | Safe defaults where possible |
 
 Never log raw tokens or full `.env` contents.
@@ -249,11 +248,11 @@ Never log raw tokens or full `.env` contents.
 
 ## Automation and deployment
 
-1. **GitHub Actions** — `docs/github-actions/post.yml.example` (commented, not enabled)
+1. **GitHub Actions** (recommended) — `docs/github-actions/post.yml.example`: daily at 14:07 UTC (~10:07 AM ET) plus manual `workflow_dispatch`; runs `npm test` then `npm run post`
 2. **Serverless cron** — EventBridge + Lambda, Cloud Scheduler, etc.
 3. **Cloud worker / VPS** — Workers cron, Fly.io, system cron
 
-Start with Actions + `workflow_dispatch` + `DRY_RUN=true`; enable schedule after live posting and secrets are verified.
+**Enable it:** add repo secrets `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` (Settings → Secrets and variables → Actions). Then in the GitHub web UI use **Add file → Create new file**, name it `.github/workflows/post.yml`, and paste the example. Trigger it once from the Actions tab to verify.
 
 **Deployment:** default to dry-run in new environments; pin Node in CI; monitor X errors, rate-limit headers, and failed runs. Follow X Automation rules and applicable law.
 
@@ -273,7 +272,8 @@ yearinpercent/
     progressBar.js        # █ / ░ bar
     message.js            # template picker
     compose.js            # wires percent + bar + message
-    xClient.js            # OAuth posting stub
+    loadEnv.js            # Tiny .env loader
+    xClient.js            # OAuth 1.0a X posting
   tests/                  # yearProgress, progressBar, message, compose
   docs/github-actions/
     post.yml.example      # commented schedule — copy to .github/workflows/ when ready
