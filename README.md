@@ -267,19 +267,19 @@ yearinpercent/
     default.json          # frequency, bar, timezone, dryRun
     messages.json         # motivational templates
   src/
-    index.js              # entry — dry-run compose
+    index.js              # entry — dry-run default, --live posts
     yearProgress.js       # year % calculation
     progressBar.js        # █ / ░ bar
     message.js            # template picker
     compose.js            # wires percent + bar + message
     loadEnv.js            # Tiny .env loader
     xClient.js            # OAuth 1.0a X posting
-  tests/                  # yearProgress, progressBar, message, compose
+  tests/                  # unit tests incl. mocked X API
   docs/github-actions/
-    post.yml.example      # commented schedule — copy to .github/workflows/ when ready
+    post.yml.example      # ready workflow — copy to .github/workflows/post.yml
 ```
 
-The workflow example lives under `docs/github-actions/` (pushing to `.github/workflows/` needs the `workflow` scope); copy it there when that permission is available.
+The workflow example lives under `docs/github-actions/` (pushing to `.github/workflows/` needs the `workflow` scope); copy it there via the GitHub web UI (Add file → Create new file).
 
 ---
 
