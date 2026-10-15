@@ -10,38 +10,27 @@ Automated X (Twitter) bot that posts year progress as a percentage, a Unicode pr
 
 ## Table of contents
 
-- [Project description](#project-description)
-- [Project status](#project-status)
+- [Overview](#overview)
 - [Features](#features)
 - [Example output](#example-output)
 - [How it works](#how-it-works)
-- [Architecture overview](#architecture-overview)
 - [Year-progress calculation](#year-progress-calculation)
 - [Progress-bar design](#progress-bar-design)
 - [Bot personality](#bot-personality)
 - [X API integration](#x-api-integration)
-- [Authentication / security](#authentication--security)
-- [Environment variables](#environment-variables)
-- [Local development](#local-development)
 - [Configuration](#configuration)
+- [Security](#security)
+- [Local development](#local-development)
 - [Testing](#testing)
-- [Automation / scheduling](#automation--scheduling)
+- [Automation and deployment](#automation-and-deployment)
 - [Project structure](#project-structure)
-- [Error handling](#error-handling)
-- [Future improvements](#future-improvements)
-- [Contributing](#contributing)
-- [License](#license)
-- [Author / maintainer](#author--maintainer)
+- [Contributing, license and author](#contributing-license-and-author)
 
 ---
 
-## Project description
+## Overview
 
 Node.js bot that calculates year progress, renders a matching Unicode bar, picks a line from `config/messages.json`, and composes one post. Dry-run runs locally without calling X; live posting is stubbed pending OAuth.
-
----
-
-## Project status
 
 **Early / blueprint — not production.**
 
@@ -54,6 +43,13 @@ Node.js bot that calculates year progress, renders a matching Unicode bar, picks
 | Dry-run entrypoint | `src/index.js` |
 | Live X posting (OAuth) | **Not implemented** — stub in `src/xClient.js` |
 | Scheduled automation | Example only (`docs/github-actions/post.yml.example`) |
+
+### Roadmap
+
+- OAuth 1.0a signed `POST /2/tweets`; optional OAuth 2.0 PKCE + refresh
+- “Already posted today” deduplication; media / branded bar images
+- Time-of-year templates; metrics on failed posts; multi-timezone / locale
+- Real CI workflow once secrets exist
 
 ---
 
@@ -89,9 +85,7 @@ Dry-run wraps the same body with `=== yearinpercent dry-run ===` and `DRY_RUN: p
 5. **Compose** — Headline + bar + message.
 6. **Publish** — Dry-run prints; live (future): `POST https://api.x.com/2/tweets` with user-context OAuth.
 
----
-
-## Architecture overview
+### Architecture
 
 ```text
 ┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
@@ -168,13 +162,9 @@ OAuth 1.0a user tokens suit scheduled bots. Rate limits vary by tier — watch `
 
 ---
 
-## Authentication / security
+## Configuration
 
-Never commit keys, tokens, or `.env`. Use `.env` locally (gitignored) and encrypted secrets in CI. App needs **read and write** to post; `X_BEARER_TOKEN` alone is not enough. Prefer least privilege on GitHub. Rotate/revoke leaked credentials in the Developer Portal.
-
----
-
-## Environment variables
+### Environment variables
 
 | Variable | Required for live post | Purpose |
 |----------|------------------------|---------|
@@ -187,6 +177,26 @@ Never commit keys, tokens, or `.env`. Use `.env` locally (gitignored) and encryp
 | `BOT_TIMEZONE` | No | IANA timezone for year bounds; overrides `posting.timezone` (e.g. `America/New_York`) |
 
 See `.env.example`. Do not commit real credentials.
+
+### Config files
+
+| Concern | Where |
+|---------|--------|
+| Posting frequency / cron hint | `config/default.json` → `posting` |
+| Timezone (year bounds) | `config/default.json` → `posting.timezone`; overridden by `BOT_TIMEZONE` |
+| Bar length / characters | `config/default.json` → `progressBar` |
+| Dry-run default | `config/default.json` → `dryRun` and `DRY_RUN` |
+| Motivational lines | `config/messages.json` |
+
+Match frequency to your X access tier (daily is a reasonable default).
+
+Timezone precedence: `BOT_TIMEZONE` env → `posting.timezone` → `UTC` (see [Year-progress calculation](#year-progress-calculation)).
+
+---
+
+## Security
+
+Never commit keys, tokens, or `.env`. Use `.env` locally (gitignored) and encrypted secrets in CI. App needs **read and write** to post; `X_BEARER_TOKEN` alone is not enough. Prefer least privilege on GitHub. Rotate/revoke leaked credentials in the Developer Portal.
 
 ---
 
@@ -207,20 +217,6 @@ npm run dry-run        # node src/index.js --dry-run (works on macOS, Linux, Win
 
 ---
 
-## Configuration
-
-| Concern | Where |
-|---------|--------|
-| Posting frequency / cron hint | `config/default.json` → `posting` |
-| Timezone (year bounds) | `config/default.json` → `posting.timezone`; overridden by `BOT_TIMEZONE` |
-| Bar length / characters | `config/default.json` → `progressBar` |
-| Dry-run default | `config/default.json` → `dryRun` and `DRY_RUN` |
-| Motivational lines | `config/messages.json` |
-
-Match frequency to your X access tier (daily is a reasonable default).
-
----
-
 ## Testing
 
 ```bash
@@ -236,9 +232,22 @@ npm test
 | API / auth (future) | Missing secrets throw; dry-run never networks; HTTP 429 backoff |
 | Dry-run | `--dry-run` flag forces dry-run even with `DRY_RUN=false`; prints only |
 
+### Error handling
+
+| Situation | Expected behavior |
+|-----------|-------------------|
+| Missing OAuth secrets (live) | Throw listing missing env var names |
+| `DRY_RUN=true` | Never call X; print composed post |
+| Live posting not implemented | Throw “not implemented” after credential check |
+| HTTP 429 (future) | Back off until `x-rate-limit-reset` |
+| HTTP 4xx/5xx (future) | Log status/body without secrets; fail the job |
+| Invalid config / empty messages | Safe defaults where possible |
+
+Never log raw tokens or full `.env` contents.
+
 ---
 
-## Automation / scheduling
+## Automation and deployment
 
 1. **GitHub Actions** — `docs/github-actions/post.yml.example` (commented, not enabled)
 2. **Serverless cron** — EventBridge + Lambda, Cloud Scheduler, etc.
@@ -274,31 +283,7 @@ The workflow example lives under `docs/github-actions/` (pushing to `.github/wor
 
 ---
 
-## Error handling
-
-| Situation | Expected behavior |
-|-----------|-------------------|
-| Missing OAuth secrets (live) | Throw listing missing env var names |
-| `DRY_RUN=true` | Never call X; print composed post |
-| Live posting not implemented | Throw “not implemented” after credential check |
-| HTTP 429 (future) | Back off until `x-rate-limit-reset` |
-| HTTP 4xx/5xx (future) | Log status/body without secrets; fail the job |
-| Invalid config / empty messages | Safe defaults where possible |
-
-Never log raw tokens or full `.env` contents.
-
----
-
-## Future improvements
-
-- OAuth 1.0a signed `POST /2/tweets`; optional OAuth 2.0 PKCE + refresh
-- “Already posted today” deduplication; media / branded bar images
-- Time-of-year templates; metrics on failed posts; multi-timezone / locale
-- Real CI workflow once secrets exist
-
----
-
-## Contributing
+## Contributing, license and author
 
 Improvements to calculation accuracy, tests, docs, or safe automation are welcome.
 
@@ -309,17 +294,9 @@ Improvements to calculation accuracy, tests, docs, or safe automation are welcom
 
 Contributions are licensed under MIT.
 
----
+**License:** MIT — see [LICENSE](./LICENSE).
 
-## License
-
-**MIT License** — see [LICENSE](./LICENSE).
-
----
-
-## Author / maintainer
-
-**D'yara Williams** · GitHub: [dyarawilliams](https://github.com/dyarawilliams)
+**Author / maintainer:** **D'yara Williams** · GitHub: [dyarawilliams](https://github.com/dyarawilliams)
 
 ---
 
