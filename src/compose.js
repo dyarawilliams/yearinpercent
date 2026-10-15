@@ -25,13 +25,13 @@ export function composePost(options = {}) {
   const now = options.now ?? new Date();
   const barOpts = config.progressBar ?? {};
 
-  const { percent, percentLabel, year } = getYearProgress(now);
+  const { percent, percentLabel, year } = getYearProgress(now, { timeZone: options.timeZone ?? process.env.BOT_TIMEZONE ?? config.posting?.timezone });
   const bar = renderProgressBar(percent, barOpts);
   const message = pickMessage(options.templates, options.random);
 
   const text = [
     `${year} is ${percentLabel}% complete`,
-    `${bar} ${percentLabel}%`,
+    bar,
     message,
   ].join('\n');
 

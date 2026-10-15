@@ -5,7 +5,8 @@ import { composePost } from '../src/compose.js';
 describe('composePost', () => {
   it('includes percent label, bar, and message', () => {
     const result = composePost({
-      now: new Date(2025, 0, 1, 0, 0, 0, 0),
+      now: new Date(Date.UTC(2025, 0, 1)),
+      timeZone: 'UTC',
       templates: ['Test message.'],
       random: () => 0,
       config: {
@@ -17,7 +18,8 @@ describe('composePost', () => {
     assert.equal(result.bar, '░░░░░░░░░░');
     assert.equal(result.message, 'Test message.');
     assert.match(result.text, /2025 is 0\.00% complete/);
-    assert.match(result.text, /░░░░░░░░░░ 0\.00%/);
+    assert.equal(result.text, '2025 is 0.00% complete\n░░░░░░░░░░\nTest message.');
+    assert.equal(result.text.match(/%/g).length, 1);
     assert.match(result.text, /Test message\./);
   });
 

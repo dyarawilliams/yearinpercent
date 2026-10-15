@@ -46,7 +46,7 @@ Node.js bot that calculates year progress, renders a matching Unicode bar, picks
 - Continuous year % (2 decimals); leap-year aware (Jan 1 → next Jan 1)
 - Progress bar (`█` / `░`) aligned with the rounded percent
 - Rotating motivational messages; dry-run by default
-- Config for bar, timezone hints, posting metadata
+- Config for bar, timezone, posting metadata
 - Example GitHub Actions schedule (disabled) under `docs/github-actions/`
 - MIT licensed
 
@@ -56,7 +56,7 @@ Node.js bot that calculates year progress, renders a matching Unicode bar, picks
 
 ```text
 2026 is 75.34% complete
-███████████████░░░░░ 75.34%
+███████████████░░░░░
 Keep going — every percent counts.
 ```
 
@@ -66,7 +66,7 @@ Dry-run wraps the same body with `=== yearinpercent dry-run ===` and `DRY_RUN: p
 
 ## How it works
 
-1. **Clock** — Current time (`TZ` / host).
+1. **Clock** — Current time, interpreted in the configured timezone (see below).
 2. **Progress** — `elapsedMs / totalYearDurationMs * 100`, round to 2 decimals.
 3. **Bar** — Map that percent onto a fixed-length bar.
 4. **Message** — Select from `config/messages.json`.
@@ -101,7 +101,11 @@ Small, side-effect-light modules for easy tests and host swaps.
 percent = (elapsedTimeMs / totalYearDurationMs) * 100
 ```
 
-Round to **two decimals** (e.g. `75.34`). Year from `now` (no hard-coded year). Bounds: Jan 1 00:00:00.000 → next Jan 1 (leap years included). Clamp elapsed to `[0, totalMs]`; label with `toFixed(2)`. See `src/yearProgress.js`.
+Round to **two decimals** (e.g. `75.34`); label with `toFixed(2)`. Year from `now` (no hard-coded year). See `src/yearProgress.js`.
+
+- **Bounds:** Jan 1 00:00 → next Jan 1 00:00 **local time in one IANA timezone** (leap years and DST handled). Timezone precedence: `BOT_TIMEZONE` env → `posting.timezone` in `config/default.json` → `UTC`. The host `TZ` is ignored. Example: at 2026-01-01 02:00 UTC it's 2026 at 0.01% in UTC but still 2025 at 99.97% in `America/New_York`.
+- **0.00%:** exactly Jan 1 00:00 in the configured zone.
+- **100.00%:** elapsed is clamped to `[0, total)`, so next Jan 1 00:00 is 0.00% of the new year. Rounding shows `100.00%` once ≤ 0.005% of the year remains — the last **26 min 16.8 s** of Dec 31 (365-day year) or **26 min 21.12 s** (leap year). This is intended.
 
 ---
 
@@ -159,7 +163,7 @@ Never commit keys, tokens, or `.env`. Use `.env` locally (gitignored) and encryp
 | `X_ACCESS_TOKEN_SECRET` | Yes (OAuth 1.0a) | User access token secret |
 | `X_BEARER_TOKEN` | No | Optional; **not sufficient alone for posting** |
 | `DRY_RUN` | No (default `true`) | Unless `false`, compose only — do not call X |
-| `TZ` | No | Timezone (e.g. `America/New_York`) |
+| `BOT_TIMEZONE` | No | IANA timezone for year bounds; overrides `posting.timezone` (e.g. `America/New_York`) |
 
 See `.env.example`. Do not commit real credentials.
 
@@ -197,7 +201,7 @@ No runtime dependencies in the current scaffold. Uses Node’s built-in test run
 | Concern | Where |
 |---------|--------|
 | Posting frequency / cron hint | `config/default.json` → `posting` |
-| Timezone hint | `config/default.json` → `posting.timezone` and/or `TZ` |
+| Timezone (year bounds) | `config/default.json` → `posting.timezone`; overridden by `BOT_TIMEZONE` |
 | Bar length / characters | `config/default.json` → `progressBar` |
 | Dry-run default | `config/default.json` → `dryRun` and `DRY_RUN` |
 | Motivational lines | `config/messages.json` |
@@ -214,7 +218,7 @@ npm test
 
 | Area | Cases |
 |------|--------|
-| Year progress | Leap vs non-leap; start / mid / end; `0.00%` / near-`100.00%`; 2-decimal rounding; no hard-coded year |
+| Year progress | Leap vs non-leap; mid-year; Jan 1 00:00 → `0.00%`; last moment of Dec 31 → `100.00%`; 1 ms before the 100% window → `99.99%`; same instant in `America/New_York` vs `UTC`; `BOT_TIMEZONE` override; no hard-coded year |
 | Progress bar | Empty / full / mid; custom chars; clamp; length vs percent |
 | Messages | Load templates; deterministic pick with injected RNG; empty fallback |
 | Compose | Headline + bar + message; percent in text |
