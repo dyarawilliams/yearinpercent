@@ -3,12 +3,12 @@
 # under Settings → Secrets and variables → Actions:
 #   X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET
 
-name: yearinpercent daily post
+name: yearinpercent monthly post
 
 on:
   schedule:
-    # 14:07 UTC ≈ 10:07 AM ET (EDT); 9:07 AM ET in winter (EST)
-    - cron: '7 14 * * *'
+    # 1st of each month, 14:07 UTC ≈ 10:07 AM ET (EDT); 9:07 AM ET in winter (EST)
+    - cron: '7 14 1 * *'
   workflow_dispatch:
 
 concurrency:

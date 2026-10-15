@@ -1,7 +1,7 @@
 {
   "posting": {
-    "frequency": "daily",
-    "cronHint": "0 9 * * *",
+    "frequency": "monthly",
+    "cronHint": "7 14 1 * *",
     "timezone": "America/New_York"
   },
   "progressBar": {
