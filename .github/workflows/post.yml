@@ -3,7 +3,7 @@
 # under Settings → Secrets and variables → Actions:
 #   X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET
 
-name: yearinpercent monthly post
+name: yearinpercent weekly post
 
 on:
   schedule:
