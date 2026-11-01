@@ -184,7 +184,7 @@ See `.env.example`. Do not commit real credentials.
 | Dry-run default | `config/default.json` → `dryRun` and `DRY_RUN` |
 | Motivational lines | `config/messages.json` |
 
-Match frequency to your X access tier (default: monthly on the 1st plus every Friday).
+Match frequency to your X access tier (default: weekly, every Friday).
 
 Timezone precedence: `BOT_TIMEZONE` env → `posting.timezone` → `UTC` (see [Year-progress calculation](#year-progress-calculation)).
 
@@ -248,7 +248,7 @@ Never log raw tokens or full `.env` contents.
 
 ## Automation and deployment
 
-1. **GitHub Actions** (recommended) — `docs/github-actions/post.yml.example`: monthly on the 1st (`7 14 1 * *`) and every Friday (`7 14 * * 5`), both at 14:07 UTC (~9:07 AM ET in winter) plus manual `workflow_dispatch`; runs `npm test` then `npm run post`
+1. **GitHub Actions** (recommended) — `docs/github-actions/post.yml.example`: weekly every Friday at 14:07 UTC (`7 14 * * 5`, ~9:07 AM ET in winter, 10:07 AM ET in summer) plus manual `workflow_dispatch`; runs `npm test` then `npm run post`
 2. **Serverless cron** — EventBridge + Lambda, Cloud Scheduler, etc.
 3. **Cloud worker / VPS** — Workers cron, Fly.io, system cron
 
