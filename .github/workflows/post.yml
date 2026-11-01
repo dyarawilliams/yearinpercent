@@ -7,8 +7,7 @@ name: yearinpercent monthly post
 
 on:
   schedule:
-    # 1st of each month, 14:07 UTC ≈ 10:07 AM ET (EDT); 9:07 AM ET in winter (EST)
-    - cron: '7 14 1 * *'
+    - cron: '7 14 * * 5'
   workflow_dispatch:
 
 concurrency:
