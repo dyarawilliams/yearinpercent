@@ -39,8 +39,8 @@ Node.js bot that calculates year progress, renders a matching PNG progress bar, 
 | Message selection | `src/message.js` |
 | Post composition | `src/compose.js` |
 | Dry-run entrypoint | `src/index.js` |
-| Live X posting (OAuth 1.0a) | `src/xClient.js` — implemented, tested with mocked API |
-| Scheduled automation | Ready workflow in `docs/github-actions/post.yml.example` — copy to enable |
+| Live X posting (OAuth 1.0a) | `src/xClient.js` — live and verified (image upload + post) |
+| Scheduled automation | `.github/workflows/post.yml` — live, every Friday (template in `docs/github-actions/`) |
 
 ### Roadmap
 
@@ -56,7 +56,7 @@ Node.js bot that calculates year progress, renders a matching PNG progress bar, 
 - PNG progress bar attached to each post, aligned with the rounded percent; `█`/`░` text bar fallback
 - Rotating motivational messages; dry-run by default
 - Config for timezone, posting metadata
-- Example GitHub Actions schedule (disabled) under `docs/github-actions/`
+- Weekly GitHub Actions schedule (Fridays) plus manual runs
 - MIT licensed
 
 ---
@@ -269,11 +269,11 @@ Never log raw tokens or full `.env` contents.
 
 ## Automation and deployment
 
-1. **GitHub Actions** (recommended) — `docs/github-actions/post.yml.example`: weekly every Friday at 14:07 UTC (`7 14 * * 5`, ~9:07 AM ET in winter, 10:07 AM ET in summer) plus manual `workflow_dispatch`; runs `npm test` then `npm run post`
+1. **GitHub Actions** (recommended) — `docs/github-actions/post.yml.example`: weekly every Friday at 14:07 UTC (`7 14 * * 5`, ~9:07 AM ET in winter, 10:07 AM ET in summer) plus manual `workflow_dispatch`; runs `npm test` then `npm run post`. **Live** in this repo as `.github/workflows/post.yml`. GitHub runs scheduled jobs on a best-effort basis, so posts often go out hours late; use **Run workflow** for an on-demand post
 2. **Serverless cron** — EventBridge + Lambda, Cloud Scheduler, etc.
 3. **Cloud worker / VPS** — Workers cron, Fly.io, system cron
 
-**Enable it:** add repo secrets `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` (Settings → Secrets and variables → Actions). Then in the GitHub web UI use **Add file → Create new file**, name it `.github/workflows/post.yml`, and paste the example. Trigger it once from the Actions tab to verify.
+**Enable it (forks):** add repo secrets `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` (Settings → Secrets and variables → Actions). Then in the GitHub web UI use **Add file → Create new file**, name it `.github/workflows/post.yml`, and paste the example. Trigger it once from the Actions tab to verify.
 
 **Deployment:** default to dry-run in new environments; pin Node in CI; monitor X errors, rate-limit headers, and failed runs. Follow X Automation rules and applicable law.
 
@@ -284,6 +284,7 @@ Never log raw tokens or full `.env` contents.
 ```text
 yearinpercent/
   README.md  LICENSE  .gitignore  .env.example  package.json
+  .github/workflows/post.yml  # live weekly workflow
   config/
     default.json          # frequency, timezone, fallback bar, dryRun
     messages.json         # motivational templates
@@ -300,6 +301,7 @@ yearinpercent/
   assets/
     glyphs.json           # pre-rendered label glyphs
     fonts/Poppins-OFL.txt # font license
+    x-profile-pic.jpg     # bot profile picture (color reference)
   scripts/build-glyphs.py # dev-only glyph builder
   tests/                  # unit tests incl. mocked X API
   docs/example-progress.png

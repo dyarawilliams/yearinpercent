@@ -10,5 +10,5 @@
     "emptyChar": "░"
   },
   "dryRun": true,
-  "messageSelection": "random"
+  "messageSelection": "weekly-rotation"
 }
