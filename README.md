@@ -89,7 +89,7 @@ Dry-run prints both versions, writes the image to `out/progress.png`, and ends w
 1. **Clock** — Current time, interpreted in the configured timezone (see below).
 2. **Progress** — `elapsedMs / totalYearDurationMs * 100`, round to 2 decimals.
 3. **Image** — Render the PNG bar for that percent and year.
-4. **Message** — Select from `config/messages.json`.
+4. **Message** — Pick this week's line from `config/messages.json` (rotates in order).
 5. **Compose** — Headline + message.
 6. **Publish** — Dry-run prints and saves the image; live uploads it (`POST /2/media/upload`), then posts (`POST /2/tweets`) with the media id.
 
@@ -149,7 +149,7 @@ Zero dependencies and identical on every OS: `src/png.js` encodes the PNG with `
 
 ## Bot personality
 
-Motivational, brief, encouraging. Templates in `config/messages.json` (default: random). Samples are tone examples — replace to match your voice.
+Motivational, brief, encouraging. 40 lines in `config/messages.json`, rotated in file order one per week (Mon–Sun in the bot's timezone), so every line is used once before any repeats. The rotation continues across years and needs no saved state. Samples are tone examples — replace to match your voice.
 
 - “Keep going — every percent counts.”
 - “Small steps stack up. This year is still yours.”
@@ -245,7 +245,7 @@ npm test
 | Year progress | Leap vs non-leap; mid-year; Jan 1 00:00 → `0.00%`; last moment of Dec 31 → `100.00%`; 1 ms before the 100% window → `99.99%`; same instant in `America/New_York` vs `UTC`; `BOT_TIMEZONE` override; no hard-coded year |
 | Progress image | 1200×240 PNG; gradient colors at fill edges and 0% / 100%; gradient fixed to track; navy background, purple frame, tab, label |
 | Fallback bar | Empty / full / mid; custom chars; clamp |
-| Messages | Load templates; deterministic pick with injected RNG; empty fallback |
+| Messages | Load templates; weekly rotation (Mon–Sun, timezone-aware, no repeats until all lines used, continues across years); empty fallback |
 | Compose | Image text (no bar) and fallback text (percent, bar, message); percent once |
 | API / auth | OAuth signature vs. documented example; missing secrets; dry-run never calls fetch; success id; image upload request shape + `media_ids`; fallback to text bar on upload 401 / 402 / 429 / missing id / network error / render error; text-post failure exits nonzero; 401; 429 (no retry / one bounded retry); 500; text > 280 |
 | Dry-run | `--dry-run` flag forces dry-run even with `DRY_RUN=false`; prints image text and fallback text, writes `out/progress.png` |
@@ -293,7 +293,7 @@ yearinpercent/
     progressImage.js      # PNG progress bar
     progressBar.js        # █ / ░ text fallback
     png.js                # tiny PNG encoder
-    message.js            # template picker
+    message.js            # weekly message rotation
     compose.js            # image text + fallback text
     loadEnv.js            # Tiny .env loader
     xClient.js            # OAuth 1.0a media upload + posting

@@ -19,16 +19,17 @@ function loadDefaultConfig() {
 }
 
 /**
- * @param {{ now?: Date, config?: object, templates?: string[], random?: () => number }} [options]
+ * @param {{ now?: Date, config?: object, templates?: string[], timeZone?: string }} [options]
  * @returns {{ text: string, fallbackText: string, percent: number, percentLabel: string, bar: string, message: string, year: number }}
  */
 export function composePost(options = {}) {
   const config = options.config ?? loadDefaultConfig();
   const now = options.now ?? new Date();
 
-  const { percent, percentLabel, year } = getYearProgress(now, { timeZone: options.timeZone ?? process.env.BOT_TIMEZONE ?? config.posting?.timezone });
+  const timeZone = options.timeZone ?? process.env.BOT_TIMEZONE ?? config.posting?.timezone;
+  const { percent, percentLabel, year } = getYearProgress(now, { timeZone });
   const bar = renderProgressBar(percent, config.progressBar ?? {});
-  const message = pickMessage(options.templates, options.random);
+  const message = pickMessage(options.templates, { now, timeZone: timeZone || 'UTC' });
   const headline = `${year} is ${percentLabel}% complete`;
 
   const text = [headline, message].join('\n');
