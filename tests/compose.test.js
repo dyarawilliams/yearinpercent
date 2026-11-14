@@ -20,6 +20,19 @@ describe('composePost', () => {
     assert.doesNotMatch(result.text, /[█░]/);
   });
 
+  it('fallback text matches the original format: percent, bar, message', () => {
+    const result = composePost({
+      now: new Date(Date.UTC(2025, 0, 1)),
+      timeZone: 'UTC',
+      templates: ['Test message.'],
+      random: () => 0,
+      config: { progressBar: { length: 10, filledChar: '█', emptyChar: '░' } },
+    });
+    assert.equal(result.bar, '░░░░░░░░░░');
+    assert.equal(result.fallbackText, '2025 is 0.00% complete\n░░░░░░░░░░\nTest message.');
+    assert.equal(result.fallbackText.match(/%/g).length, 1);
+  });
+
   it('works at mid-year with 2-decimal label', () => {
     const result = composePost({
       now: new Date(2024, 5, 30, 12, 0, 0, 0),
@@ -28,5 +41,7 @@ describe('composePost', () => {
     });
     assert.match(result.percentLabel, /^\d+\.\d{2}$/);
     assert.equal(result.text, `${result.year} is ${result.percentLabel}% complete\nKeep going.`);
+    assert.equal(result.fallbackText, `${result.year} is ${result.percentLabel}% complete\n${result.bar}\nKeep going.`);
+    assert.equal([...result.bar].length, 20);
   });
 });

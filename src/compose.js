@@ -1,9 +1,11 @@
 /**
- * Compose the final post text: percentage + motivational message.
- * The progress bar is a separate PNG (see progressImage.js).
+ * Compose the post text.
+ *   text         — percent + message (posted with the PNG progress bar attached)
+ *   fallbackText — percent + █/░ bar + message (posted if the image can't be used)
  */
 
 import { getYearProgress } from './yearProgress.js';
+import { renderProgressBar } from './progressBar.js';
 import { pickMessage } from './message.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -18,21 +20,21 @@ function loadDefaultConfig() {
 
 /**
  * @param {{ now?: Date, config?: object, templates?: string[], random?: () => number }} [options]
- * @returns {{ text: string, percent: number, percentLabel: string, message: string, year: number }}
+ * @returns {{ text: string, fallbackText: string, percent: number, percentLabel: string, bar: string, message: string, year: number }}
  */
 export function composePost(options = {}) {
   const config = options.config ?? loadDefaultConfig();
   const now = options.now ?? new Date();
 
   const { percent, percentLabel, year } = getYearProgress(now, { timeZone: options.timeZone ?? process.env.BOT_TIMEZONE ?? config.posting?.timezone });
+  const bar = renderProgressBar(percent, config.progressBar ?? {});
   const message = pickMessage(options.templates, options.random);
+  const headline = `${year} is ${percentLabel}% complete`;
 
-  const text = [
-    `${year} is ${percentLabel}% complete`,
-    message,
-  ].join('\n');
+  const text = [headline, message].join('\n');
+  const fallbackText = [headline, bar, message].join('\n');
 
-  return { text, percent, percentLabel, message, year };
+  return { text, fallbackText, percent, percentLabel, bar, message, year };
 }
 
 export default composePost;

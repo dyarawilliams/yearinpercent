@@ -165,3 +165,73 @@ test('image: dry-run never uploads', async () => {
   const r = await createPost('hi', { env: {}, image: Buffer.from('png'), fetch: () => assert.fail('fetch called') });
   assert.equal(r.dryRun, true);
 });
+
+const FALLBACK = 'hello\n██████████░░░░░░░░░░\nmsg';
+const errs = () => { const lines = []; return { lines, log() {}, error: (m) => lines.push(m) }; };
+
+test('fallback: success path attaches media and posts the image text', async () => {
+  const calls = [];
+  const r = await createPost('hello\nmsg', {
+    env: ENV, logger: quiet, image: () => Buffer.from('png'), fallbackText: FALLBACK,
+    fetch: async (url, init) => {
+      calls.push({ url, body: JSON.parse(init.body) });
+      return url === MEDIA_UPLOAD_URL ? res(200, { data: { id: 'm1' } }) : res(201, { data: { id: 'p1' } });
+    },
+  });
+  assert.equal(r.fallback, false);
+  assert.equal(r.mediaId, 'm1');
+  assert.deepEqual(calls[1].body, { text: 'hello\nmsg', media: { media_ids: ['m1'] } });
+});
+
+for (const [name, uploadRes] of [
+  ['401', () => res(401, { title: 'Unauthorized' })],
+  ['402', () => res(402, { title: 'CreditsDepleted' })],
+  ['429 after retry window', () => res(429, {}, { 'x-rate-limit-reset': '3600' })],
+  ['missing id', () => res(200, { data: {} })],
+  ['network error', () => { throw new TypeError('fetch failed'); }],
+]) {
+  test(`fallback: upload ${name} → warns and posts text bar without media`, async () => {
+    const calls = []; const logger = errs();
+    const r = await createPost('hello\nmsg', {
+      env: ENV, logger, now: () => 0, sleep: () => assert.fail('slept'),
+      image: Buffer.from('png'), fallbackText: FALLBACK,
+      fetch: async (url, init) => {
+        calls.push({ url, body: JSON.parse(init.body) });
+        return url === MEDIA_UPLOAD_URL ? uploadRes() : res(201, { data: { id: 'p2' } });
+      },
+    });
+    assert.equal(r.fallback, true);
+    assert.equal(r.id, 'p2');
+    assert.equal(r.mediaId, undefined);
+    assert.deepEqual(calls.at(-1), { url: POST_URL, body: { text: FALLBACK } });
+    assert.match(logger.lines.join('\n'), /Warning: progress image could not be attached[\s\S]*Reason: /);
+  });
+}
+
+test('fallback: image render error falls back without calling upload', async () => {
+  const urls = [];
+  const r = await createPost('hello\nmsg', {
+    env: ENV, logger: errs(), fallbackText: FALLBACK,
+    image: () => { throw new Error('render boom'); },
+    fetch: async (url) => { urls.push(url); return res(201, { data: { id: 'p3' } }); },
+  });
+  assert.deepEqual(urls, [POST_URL]);
+  assert.match(r.fallbackReason, /render boom/);
+});
+
+test('fallback: text post failure still exits non-zero', async () => {
+  await assert.rejects(
+    createPost('hello\nmsg', {
+      env: ENV, logger: errs(), image: Buffer.from('png'), fallbackText: FALLBACK,
+      fetch: async (url) => (url === MEDIA_UPLOAD_URL ? res(403, {}) : res(500, { error: 'down' })),
+    }),
+    /post failed \(500\).*down/
+  );
+});
+
+test('fallback text over 280 chars is rejected before sending', async () => {
+  await assert.rejects(
+    createPost('ok', { env: ENV, fallbackText: 'x'.repeat(281), fetch: () => assert.fail() }),
+    /281 characters/
+  );
+});

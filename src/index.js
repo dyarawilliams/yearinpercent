@@ -1,7 +1,8 @@
 /**
  * yearinpercent — entry point. Dry-run by default.
  * Posts only when DRY_RUN=false (or --live) and --dry-run is absent. --dry-run always wins.
- * Dry-run writes the progress image to out/progress.png; live uploads it and attaches it.
+ * Dry-run writes the progress image to out/progress.png; live uploads it and attaches it,
+ * falling back to the text █/░ bar post if the image can't be rendered or uploaded.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -24,15 +25,18 @@ if (process.argv.includes('--dry-run')) {
 
 async function main() {
   const composed = composePost();
-  const { png } = renderProgressImage(composed);
-  const result = await createPost(composed.text, { image: png });
+  const image = () => renderProgressImage(composed).png;
+  const result = await createPost(composed.text, { image, fallbackText: composed.fallbackText });
   if (result.dryRun) {
     mkdirSync(dirname(DRY_RUN_IMAGE), { recursive: true });
-    writeFileSync(DRY_RUN_IMAGE, png);
+    writeFileSync(DRY_RUN_IMAGE, image());
     console.log('=== yearinpercent dry-run ===');
     console.log(result.text);
+    console.log('--- image ---');
+    console.log(relative(process.cwd(), DRY_RUN_IMAGE) || DRY_RUN_IMAGE);
+    console.log('--- fallback (text bar, used if the image fails) ---');
+    console.log(result.fallbackText);
     console.log('=============================');
-    console.log(`Image: ${relative(process.cwd(), DRY_RUN_IMAGE) || DRY_RUN_IMAGE}`);
     console.log(result.note);
   }
 }

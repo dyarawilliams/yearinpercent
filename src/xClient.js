@@ -165,22 +165,30 @@ export async function uploadMedia(image, ctx) {
 
 /**
  * Post text (and optionally one image) to X, or return the composed post in dry-run mode.
- * If an image is given, it is uploaded first; an upload failure throws and nothing is posted.
+ *
+ * `image` may be a Buffer or a function returning one (so rendering errors are caught too).
+ * Without `fallbackText`, an image failure throws and nothing is posted.
+ * With `fallbackText`, any image failure (render, 401/402/403, 429 after retry, missing id,
+ * network error) logs a warning and posts `fallbackText` without media instead.
+ * A failure of the text post itself always throws.
  * @param {string} text
- * @param {{ image?: Buffer, dryRun?: boolean, env?: object, fetch?: Function, sleep?: Function, logger?: Console, now?: () => number }} [options]
+ * @param {{ image?: Buffer | (() => Buffer), fallbackText?: string, dryRun?: boolean, env?: object, fetch?: Function, sleep?: Function, logger?: Console, now?: () => number }} [options]
  */
 export async function createPost(text, options = {}) {
   const env = options.env ?? process.env;
   const creds = loadCredentialsFromEnv(env);
   const dryRun = options.dryRun ?? creds.dryRun;
   const log = options.logger ?? console;
+  const { fallbackText } = options;
 
-  if (postLength(text) > MAX_POST_LENGTH) {
-    throw new Error(`Post is ${postLength(text)} characters; X allows at most ${MAX_POST_LENGTH}.`);
+  for (const t of fallbackText === undefined ? [text] : [text, fallbackText]) {
+    if (postLength(t) > MAX_POST_LENGTH) {
+      throw new Error(`Post is ${postLength(t)} characters; X allows at most ${MAX_POST_LENGTH}.`);
+    }
   }
 
   if (dryRun) {
-    return { ok: true, dryRun: true, text, note: 'DRY_RUN: post was composed but not sent to X.' };
+    return { ok: true, dryRun: true, text, fallbackText, note: 'DRY_RUN: post was composed but not sent to X.' };
   }
 
   assertPostingCredentials(creds);
@@ -192,17 +200,28 @@ export async function createPost(text, options = {}) {
     now: options.now ?? Date.now,
   };
 
-  const payload = { text };
+  let postText = text;
   let mediaId;
+  let fallbackReason;
   if (options.image) {
-    mediaId = await uploadMedia(options.image, ctx);
-    payload.media = { media_ids: [mediaId] };
+    try {
+      const image = typeof options.image === 'function' ? options.image() : options.image;
+      mediaId = await uploadMedia(image, ctx);
+    } catch (err) {
+      if (fallbackText === undefined) throw err;
+      fallbackReason = err?.message || String(err);
+      log.error(`Warning: progress image could not be attached — posting the text-bar version instead.\nReason: ${fallbackReason}`);
+      postText = fallbackText;
+    }
   }
+
+  const payload = { text: postText };
+  if (mediaId) payload.media = { media_ids: [mediaId] };
 
   const data = await signedJsonPost(POST_URL, payload, 'post', ctx);
   const id = data?.data?.id;
-  log.log(`Posted to X. Post id: ${id}`);
-  return { ok: true, dryRun: false, text, id, mediaId };
+  log.log(`Posted to X${mediaId ? ' with progress image' : ''}. Post id: ${id}`);
+  return { ok: true, dryRun: false, text: postText, id, mediaId, fallback: Boolean(fallbackReason), fallbackReason };
 }
 
 export default createPost;

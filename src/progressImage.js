@@ -1,10 +1,11 @@
 /**
  * Progress-bar image (PNG) attached to each post.
  *
- * Layout (1200×240): near-black background, yellow frame, "<YEAR> Progress Bar"
- * label on a black tab that breaks the top border, and a bar inside the frame —
- * yellow fill from the left, white remainder. Fill width uses the same rounded
- * percent as the post text: round(barWidth * percent / 100).
+ * Layout (1200×240): deep-navy background, purple frame, white "<YEAR> Progress Bar"
+ * label on a navy tab that breaks the top border, and a bar inside the frame —
+ * blue→violet gradient fill from the left, white track. The gradient spans the
+ * full track width, so more violet shows as the year progresses. Fill width uses
+ * the same rounded percent as the post text: round(barWidth * percent / 100).
  *
  * Text is drawn from pre-rendered Poppins ExtraBold masks (assets/glyphs.json,
  * OFL-1.1), so output is identical on every OS with zero dependencies.
@@ -26,12 +27,13 @@ export const LAYOUT = Object.freeze({
 });
 
 export const COLORS = Object.freeze({
-  background: [10, 10, 10],
-  frame: [252, 246, 0],
-  fill: [250, 222, 0],
-  empty: [255, 255, 255],
-  tab: [0, 0, 0],
-  text: [255, 255, 255],
+  background: [0x03, 0x0a, 0x1d], // #030A1D
+  frame: [0xa6, 0x53, 0xfb], // #A653FB
+  fillStart: [0x32, 0x95, 0xfa], // #3295FA (left edge of track)
+  fillEnd: [0x93, 0x48, 0xfd], // #9348FD (right edge of track)
+  empty: [0xff, 0xff, 0xff],
+  tab: [0x03, 0x0a, 0x1d],
+  text: [0xff, 0xff, 0xff],
 });
 
 let glyphCache;
@@ -52,6 +54,12 @@ function fillRect(px, W, x, y, w, h, [r, g, b]) {
       px[i] = r; px[i + 1] = g; px[i + 2] = b;
     }
   }
+}
+
+/** Gradient color for track column `x` (0 … barWidth-1). */
+export function gradientAt(x, barWidth = LAYOUT.bar.w) {
+  const t = barWidth > 1 ? x / (barWidth - 1) : 0;
+  return COLORS.fillStart.map((a, i) => Math.round(a + (COLORS.fillEnd[i] - a) * t));
 }
 
 /** Width in px of a label set with the glyph atlas. */
@@ -107,7 +115,7 @@ export function renderProgressImage({ percent, year }) {
   fillRect(px, W, frame.x + frame.w - t, frame.y, t, frame.h, COLORS.frame);
 
   const filled = fillWidth(percent, bar.w);
-  fillRect(px, W, bar.x, bar.y, filled, bar.h, COLORS.fill);
+  for (let x = 0; x < filled; x++) fillRect(px, W, bar.x + x, bar.y, 1, bar.h, gradientAt(x, bar.w));
   fillRect(px, W, bar.x + filled, bar.y, bar.w - filled, bar.h, COLORS.empty);
 
   const glyphs = loadGlyphs();

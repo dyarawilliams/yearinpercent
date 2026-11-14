@@ -53,7 +53,7 @@ Node.js bot that calculates year progress, renders a matching PNG progress bar, 
 ## Features
 
 - Continuous year % (2 decimals); leap-year aware (Jan 1 → next Jan 1)
-- PNG progress bar attached to each post, aligned with the rounded percent
+- PNG progress bar attached to each post, aligned with the rounded percent; `█`/`░` text bar fallback
 - Rotating motivational messages; dry-run by default
 - Config for timezone, posting metadata
 - Example GitHub Actions schedule (disabled) under `docs/github-actions/`
@@ -72,7 +72,15 @@ Attached image:
 
 ![2026 Progress Bar at 86%](docs/example-progress.png)
 
-Dry-run prints the same text between `=== yearinpercent dry-run ===` lines, writes the image to `out/progress.png`, and ends with `DRY_RUN: post was composed but not sent to X.`
+If the image can't be used, the bot posts the text-bar fallback instead:
+
+```text
+2026 is 86.00% complete
+█████████████████░░░
+Keep going — every percent counts.
+```
+
+Dry-run prints both versions, writes the image to `out/progress.png`, and ends with `DRY_RUN: post was composed but not sent to X.`
 
 ---
 
@@ -121,11 +129,21 @@ Round to **two decimals** (e.g. `75.34`); label with `toFixed(2)`. Year from `no
 
 ## Progress-bar design
 
-A 1200×240 PNG: near-black background, yellow frame, a white **“<YEAR> Progress Bar”** label on a black tab that breaks the top border, and a 1080 px bar inside — yellow fill from the left, white remainder.
+A 1200×240 PNG with a white **“<YEAR> Progress Bar”** label on a tab that breaks the top border, and a 1080 px bar inside the frame.
+
+| Element | Color |
+|---------|-------|
+| Background and label tab | navy `#030A1D` |
+| Border | purple `#A653FB` |
+| Fill | left-to-right gradient `#3295FA` → `#9348FD`, fixed to the full track (more violet shows as the year progresses) |
+| Track (unfilled) | white `#FFFFFF` |
+| Label | white |
 
 Fill width: `round(1080 × percent / 100)` px, using the **same** rounded percent as the post text. The year comes from the same timezone logic.
 
 Zero dependencies and identical on every OS: `src/png.js` encodes the PNG with `node:zlib`, and the label is drawn from pre-rendered Poppins ExtraBold glyphs in `assets/glyphs.json` (SIL OFL 1.1, see `assets/fonts/Poppins-OFL.txt`). To change the font, run `scripts/build-glyphs.py` (Pillow, dev only).
+
+**Text fallback:** `src/progressBar.js` renders a 20-character `█`/`░` bar (`round(percent / 100 × 20)` filled, same rounded percent; length and characters in `config/default.json` → `progressBar`). It's used only when the image can't be rendered or uploaded.
 
 ---
 
@@ -152,7 +170,7 @@ Motivational, brief, encouraging. Templates in `config/messages.json` (default: 
 
 Docs: [Upload Media](https://docs.x.com/x-api/media/upload-media) · [Create Post](https://docs.x.com/x-api/posts/create-post) · [Developer Portal](https://developer.x.com/)
 
-**Status: implemented.** `src/xClient.js` signs both requests with OAuth 1.0a HMAC-SHA1 (`node:crypto`, no dependencies; JSON bodies aren't part of the signature) and sends them via `fetch`. Posts over 280 characters are rejected before sending. If the image upload fails, nothing is posted and the run exits nonzero. On success it logs the post id. On `429` it logs when the limit resets (`x-rate-limit-reset`) and retries once only if that's within ~60 s; otherwise it exits nonzero.
+**Status: implemented.** `src/xClient.js` signs both requests with OAuth 1.0a HMAC-SHA1 (`node:crypto`, no dependencies; JSON bodies aren't part of the signature) and sends them via `fetch`. Posts over 280 characters are rejected before sending. If rendering or uploading the image fails for any reason (401/402/403, 429 after the retry, missing media id, network error), it logs a warning with the reason and posts the text-bar fallback without media. If the text post itself fails, the run exits nonzero. On success it logs the post id. On `429` it logs when the limit resets (`x-rate-limit-reset`) and retries once only if that's within ~60 s; otherwise it exits nonzero.
 
 **For a live bot:**
 - Guard against double-fire (“already posted today”)
@@ -182,6 +200,7 @@ See `.env.example`. Do not commit real credentials.
 |---------|--------|
 | Posting frequency / cron hint | `config/default.json` → `posting` |
 | Timezone (year bounds) | `config/default.json` → `posting.timezone`; overridden by `BOT_TIMEZONE` |
+| Fallback bar length / characters | `config/default.json` → `progressBar` |
 | Dry-run default | `config/default.json` → `dryRun` and `DRY_RUN` |
 | Motivational lines | `config/messages.json` |
 
@@ -224,11 +243,12 @@ npm test
 | Area | Cases |
 |------|--------|
 | Year progress | Leap vs non-leap; mid-year; Jan 1 00:00 → `0.00%`; last moment of Dec 31 → `100.00%`; 1 ms before the 100% window → `99.99%`; same instant in `America/New_York` vs `UTC`; `BOT_TIMEZONE` override; no hard-coded year |
-| Progress image | 1200×240 PNG; fill boundary pixels at 86% and 37.42%; 0% / 100%; frame, tab and label |
+| Progress image | 1200×240 PNG; gradient colors at fill edges and 0% / 100%; gradient fixed to track; navy background, purple frame, tab, label |
+| Fallback bar | Empty / full / mid; custom chars; clamp |
 | Messages | Load templates; deterministic pick with injected RNG; empty fallback |
-| Compose | Headline + message; percent once; no text bar |
-| API / auth | OAuth signature vs. documented example; missing secrets; dry-run never calls fetch; success id; image upload request shape + `media_ids`; upload failure never posts; 401; 429 (no retry / one bounded retry); 500; text > 280 |
-| Dry-run | `--dry-run` flag forces dry-run even with `DRY_RUN=false`; prints text, writes `out/progress.png` |
+| Compose | Image text (no bar) and fallback text (percent, bar, message); percent once |
+| API / auth | OAuth signature vs. documented example; missing secrets; dry-run never calls fetch; success id; image upload request shape + `media_ids`; fallback to text bar on upload 401 / 402 / 429 / missing id / network error / render error; text-post failure exits nonzero; 401; 429 (no retry / one bounded retry); 500; text > 280 |
+| Dry-run | `--dry-run` flag forces dry-run even with `DRY_RUN=false`; prints image text and fallback text, writes `out/progress.png` |
 
 ### Error handling
 
@@ -237,7 +257,7 @@ npm test
 | Missing OAuth secrets (live) | Throw listing missing env var names |
 | `DRY_RUN=true` | Never call X; print composed post |
 | Text > 280 characters | Throw before sending |
-| Image upload fails / no media id | Throw; post is not created |
+| Image render or upload fails | Warn with reason; post the text-bar fallback without media |
 | HTTP 401/403 | Auth error with hint: Read and write permission, regenerate access token |
 | HTTP 429 | Log reset time; one retry only if reset ≤ ~60 s, else exit nonzero |
 | Other 4xx/5xx | Log status + response body (never headers/secrets); exit nonzero |
@@ -265,15 +285,16 @@ Never log raw tokens or full `.env` contents.
 yearinpercent/
   README.md  LICENSE  .gitignore  .env.example  package.json
   config/
-    default.json          # frequency, timezone, dryRun
+    default.json          # frequency, timezone, fallback bar, dryRun
     messages.json         # motivational templates
   src/
     index.js              # entry — dry-run default, --live posts
     yearProgress.js       # year % calculation
     progressImage.js      # PNG progress bar
+    progressBar.js        # █ / ░ text fallback
     png.js                # tiny PNG encoder
     message.js            # template picker
-    compose.js            # wires percent + message
+    compose.js            # image text + fallback text
     loadEnv.js            # Tiny .env loader
     xClient.js            # OAuth 1.0a media upload + posting
   assets/

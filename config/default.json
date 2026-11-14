@@ -4,6 +4,11 @@
     "cronHint": "7 14 * * 5",
     "timezone": "America/New_York"
   },
+  "progressBar": {
+    "length": 20,
+    "filledChar": "█",
+    "emptyChar": "░"
+  },
   "dryRun": true,
   "messageSelection": "random"
 }
