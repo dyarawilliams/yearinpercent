@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { signRequest, buildAuthHeader, createPost, POST_URL } from '../src/xClient.js';
+import { signRequest, buildAuthHeader, createPost, POST_URL, MEDIA_UPLOAD_URL } from '../src/xClient.js';
 import { parseEnv } from '../src/loadEnv.js';
 
 const ENV = {
@@ -116,4 +116,52 @@ test('text over 280 chars is rejected before sending', async () => {
 
 test('.env parser handles quotes and comments', () => {
   assert.deepEqual(parseEnv('# c\nA=1\nB="two words"\nexport C=3 # note\n'), { A: '1', B: 'two words', C: '3' });
+});
+
+test('image: uploads base64 PNG as tweet_image, then posts with media_ids', async () => {
+  const calls = [];
+  const image = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+  const r = await createPost('hello', {
+    env: ENV, logger: quiet, image,
+    fetch: async (url, init) => {
+      calls.push({ url, init });
+      return url === MEDIA_UPLOAD_URL
+        ? res(200, { data: { id: '1880028106020515840', media_key: '3_1880028106020515840' } })
+        : res(201, { data: { id: '77', text: 'hello' } });
+    },
+  });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, 'https://api.x.com/2/media/upload');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.equal(calls[0].init.headers['Content-Type'], 'application/json');
+  assert.match(calls[0].init.headers.Authorization, /^OAuth .*oauth_signature="/);
+  assert.deepEqual(JSON.parse(calls[0].init.body), { media: image.toString('base64'), media_category: 'tweet_image' });
+  assert.equal(calls[1].url, POST_URL);
+  assert.deepEqual(JSON.parse(calls[1].init.body), { text: 'hello', media: { media_ids: ['1880028106020515840'] } });
+  assert.equal(r.id, '77');
+  assert.equal(r.mediaId, '1880028106020515840');
+});
+
+test('image: upload failure throws and never creates the post', async () => {
+  const urls = [];
+  await assert.rejects(
+    createPost('hi', {
+      env: ENV, logger: quiet, image: Buffer.from('png'),
+      fetch: async (url) => { urls.push(url); return res(400, { title: 'Invalid Request' }); },
+    }),
+    /media upload failed \(400\).*Invalid Request/
+  );
+  assert.deepEqual(urls, [MEDIA_UPLOAD_URL]);
+});
+
+test('image: upload response without id fails clearly', async () => {
+  await assert.rejects(
+    createPost('hi', { env: ENV, logger: quiet, image: Buffer.from('png'), fetch: async () => res(200, { data: {} }) }),
+    /returned no media id/
+  );
+});
+
+test('image: dry-run never uploads', async () => {
+  const r = await createPost('hi', { env: {}, image: Buffer.from('png'), fetch: () => assert.fail('fetch called') });
+  assert.equal(r.dryRun, true);
 });

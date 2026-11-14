@@ -1,11 +1,16 @@
 /**
- * X API client: OAuth 1.0a (HMAC-SHA1) signed POST https://api.x.com/2/tweets.
+ * X API client: OAuth 1.0a (HMAC-SHA1) signed requests.
+ *   1. POST https://api.x.com/2/media/upload  (JSON: base64 media, media_category=tweet_image)
+ *   2. POST https://api.x.com/2/tweets        (JSON: text + media.media_ids)
+ * JSON bodies are not part of the OAuth 1.0a signature base string.
  * No runtime dependencies — uses node:crypto and global fetch (Node 18+).
- * Docs: https://docs.x.com/x-api/posts/manage-tweets/quickstart
+ * Docs: https://docs.x.com/x-api/media/upload-media, https://docs.x.com/x-api/posts/create-post
  */
 import crypto from 'node:crypto';
 
 export const POST_URL = 'https://api.x.com/2/tweets';
+export const MEDIA_UPLOAD_URL = 'https://api.x.com/2/media/upload';
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_POST_LENGTH = 280;
 const MAX_RETRY_WAIT_MS = 60_000;
 
@@ -89,10 +94,80 @@ async function safeBody(res) {
   }
 }
 
+async function failFor(res, what) {
+  const body = await safeBody(res);
+  if (res.status === 401 || res.status === 403) {
+    throw new Error(
+      `X API authentication failed (${res.status}) during ${what}: ${body}\n` +
+        'Hint: check the four X_* keys, make sure the app has "Read and write" permission ' +
+        '(User authentication settings), and regenerate the Access Token and Secret after changing permissions.'
+    );
+  }
+  throw new Error(`X API ${what} failed (${res.status}): ${body}`);
+}
+
 /**
- * Post text to X, or return the composed text in dry-run mode.
+ * Signed JSON POST with one bounded retry on 429.
+ * @returns {Promise<object>} parsed JSON body of the successful response
+ */
+async function signedJsonPost(url, payload, what, ctx) {
+  const { creds, doFetch, sleep, now, log } = ctx;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await doFetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: buildAuthHeader('POST', url, creds),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) return res.json();
+
+    if (res.status === 429) {
+      const reset = Number(res.headers.get('x-rate-limit-reset'));
+      const waitMs = Number.isFinite(reset) && reset > 0 ? reset * 1000 - now() : NaN;
+      const when = Number.isFinite(waitMs) ? new Date(reset * 1000).toISOString() : 'unknown';
+      log.error(`X API rate limit hit (429) during ${what}. Limit resets at ${when}.`);
+      if (attempt === 0 && Number.isFinite(waitMs) && waitMs <= MAX_RETRY_WAIT_MS) {
+        const ms = Math.max(waitMs, 0) + 1000;
+        log.error(`Retrying once in ${Math.ceil(ms / 1000)}s.`);
+        await sleep(ms);
+        continue;
+      }
+      throw new Error(`X API rate limited (429) during ${what}. Try again after ${when}.`);
+    }
+
+    await failFor(res, what);
+  }
+  throw new Error(`X API rate limited (429) during ${what} after retry.`);
+}
+
+/**
+ * Upload one image (PNG/JPG/GIF/WEBP ≤ 5 MB) and return its media id.
+ * @param {Buffer} image
+ */
+export async function uploadMedia(image, ctx) {
+  if (!Buffer.isBuffer(image) || image.length === 0) throw new Error('Image upload: no image data.');
+  if (image.length > MAX_IMAGE_BYTES) {
+    throw new Error(`Image is ${image.length} bytes; X allows at most ${MAX_IMAGE_BYTES} for tweet_image.`);
+  }
+  const data = await signedJsonPost(
+    MEDIA_UPLOAD_URL,
+    { media: image.toString('base64'), media_category: 'tweet_image' },
+    'media upload',
+    ctx
+  );
+  const id = data?.data?.id;
+  if (!id) throw new Error(`X API media upload returned no media id: ${JSON.stringify(data).slice(0, 500)}`);
+  return String(id);
+}
+
+/**
+ * Post text (and optionally one image) to X, or return the composed post in dry-run mode.
+ * If an image is given, it is uploaded first; an upload failure throws and nothing is posted.
  * @param {string} text
- * @param {{ dryRun?: boolean, env?: object, fetch?: Function, sleep?: Function, logger?: Console, now?: () => number }} [options]
+ * @param {{ image?: Buffer, dryRun?: boolean, env?: object, fetch?: Function, sleep?: Function, logger?: Console, now?: () => number }} [options]
  */
 export async function createPost(text, options = {}) {
   const env = options.env ?? process.env;
@@ -109,52 +184,25 @@ export async function createPost(text, options = {}) {
   }
 
   assertPostingCredentials(creds);
-  const doFetch = options.fetch ?? globalThis.fetch;
-  const sleep = options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-  const now = options.now ?? Date.now;
+  const ctx = {
+    creds,
+    log,
+    doFetch: options.fetch ?? globalThis.fetch,
+    sleep: options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
+    now: options.now ?? Date.now,
+  };
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const res = await doFetch(POST_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: buildAuthHeader('POST', POST_URL, creds),
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text }),
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const id = data?.data?.id;
-      log.log(`Posted to X. Post id: ${id}`);
-      return { ok: true, dryRun: false, text, id };
-    }
-
-    if (res.status === 429) {
-      const reset = Number(res.headers.get('x-rate-limit-reset'));
-      const waitMs = Number.isFinite(reset) && reset > 0 ? reset * 1000 - now() : NaN;
-      const when = Number.isFinite(waitMs) ? new Date(reset * 1000).toISOString() : 'unknown';
-      log.error(`X API rate limit hit (429). Limit resets at ${when}.`);
-      if (attempt === 0 && Number.isFinite(waitMs) && waitMs <= MAX_RETRY_WAIT_MS) {
-        const ms = Math.max(waitMs, 0) + 1000;
-        log.error(`Retrying once in ${Math.ceil(ms / 1000)}s.`);
-        await sleep(ms);
-        continue;
-      }
-      throw new Error(`X API rate limited (429). Try again after ${when}.`);
-    }
-
-    const body = await safeBody(res);
-    if (res.status === 401 || res.status === 403) {
-      throw new Error(
-        `X API authentication failed (${res.status}): ${body}\n` +
-          'Hint: check the four X_* keys, make sure the app has "Read and write" permission ' +
-          '(User authentication settings), and regenerate the Access Token and Secret after changing permissions.'
-      );
-    }
-    throw new Error(`X API request failed (${res.status}): ${body}`);
+  const payload = { text };
+  let mediaId;
+  if (options.image) {
+    mediaId = await uploadMedia(options.image, ctx);
+    payload.media = { media_ids: [mediaId] };
   }
-  throw new Error('X API rate limited (429) after retry.');
+
+  const data = await signedJsonPost(POST_URL, payload, 'post', ctx);
+  const id = data?.data?.id;
+  log.log(`Posted to X. Post id: ${id}`);
+  return { ok: true, dryRun: false, text, id, mediaId };
 }
 
 export default createPost;

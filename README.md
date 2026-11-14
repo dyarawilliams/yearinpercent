@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-Automated X (Twitter) bot that posts year progress as a percentage, a Unicode progress bar, and a short motivational line.
+Automated X (Twitter) bot that posts year progress as a percentage, a progress-bar image, and a short motivational line.
 
 > **Author / Maintainer:** [D'yara Williams](https://github.com/dyarawilliams) (`dyarawilliams`)
 
@@ -30,12 +30,12 @@ Automated X (Twitter) bot that posts year progress as a percentage, a Unicode pr
 
 ## Overview
 
-Node.js bot that calculates year progress, renders a matching Unicode bar, picks a line from `config/messages.json`, and composes one post. Dry-run is the default; `npm run post` publishes to X via OAuth 1.0a.
+Node.js bot that calculates year progress, renders a matching PNG progress bar, picks a line from `config/messages.json`, and composes one post. Dry-run is the default; `npm run post` publishes to X via OAuth 1.0a.
 
 | Area | Status |
 |------|--------|
 | Year-progress math | `src/yearProgress.js` |
-| Progress bar | `src/progressBar.js` |
+| Progress-bar image | `src/progressImage.js` + `src/png.js` |
 | Message selection | `src/message.js` |
 | Post composition | `src/compose.js` |
 | Dry-run entrypoint | `src/index.js` |
@@ -45,7 +45,7 @@ Node.js bot that calculates year progress, renders a matching Unicode bar, picks
 ### Roadmap
 
 - Optional OAuth 2.0 PKCE + refresh
-- “Already posted today” deduplication; media / branded bar images
+- “Already posted today” deduplication; image alt text
 - Time-of-year templates; metrics on failed posts; multi-timezone / locale
 
 ---
@@ -53,9 +53,9 @@ Node.js bot that calculates year progress, renders a matching Unicode bar, picks
 ## Features
 
 - Continuous year % (2 decimals); leap-year aware (Jan 1 → next Jan 1)
-- Progress bar (`█` / `░`) aligned with the rounded percent
+- PNG progress bar attached to each post, aligned with the rounded percent
 - Rotating motivational messages; dry-run by default
-- Config for bar, timezone, posting metadata
+- Config for timezone, posting metadata
 - Example GitHub Actions schedule (disabled) under `docs/github-actions/`
 - MIT licensed
 
@@ -64,12 +64,15 @@ Node.js bot that calculates year progress, renders a matching Unicode bar, picks
 ## Example output
 
 ```text
-2026 is 75.34% complete
-███████████████░░░░░
+2026 is 86.00% complete
 Keep going — every percent counts.
 ```
 
-Dry-run wraps the same body with `=== yearinpercent dry-run ===` and `DRY_RUN: post was composed but not sent to X.`
+Attached image:
+
+![2026 Progress Bar at 86%](docs/example-progress.png)
+
+Dry-run prints the same text between `=== yearinpercent dry-run ===` lines, writes the image to `out/progress.png`, and ends with `DRY_RUN: post was composed but not sent to X.`
 
 ---
 
@@ -77,10 +80,10 @@ Dry-run wraps the same body with `=== yearinpercent dry-run ===` and `DRY_RUN: p
 
 1. **Clock** — Current time, interpreted in the configured timezone (see below).
 2. **Progress** — `elapsedMs / totalYearDurationMs * 100`, round to 2 decimals.
-3. **Bar** — Map that percent onto a fixed-length bar.
+3. **Image** — Render the PNG bar for that percent and year.
 4. **Message** — Select from `config/messages.json`.
-5. **Compose** — Headline + bar + message.
-6. **Publish** — Dry-run prints; live (future): `POST https://api.x.com/2/tweets` with user-context OAuth.
+5. **Compose** — Headline + message.
+6. **Publish** — Dry-run prints and saves the image; live uploads it (`POST /2/media/upload`), then posts (`POST /2/tweets`) with the media id.
 
 ### Architecture
 
@@ -91,11 +94,11 @@ Dry-run wraps the same body with `=== yearinpercent dry-run ===` and `DRY_RUN: p
 │   cron / worker)│     └────────┬─────────┘             │
 └─────────────────┘              │         ┌─────────────┼─────────────┐
                                  │         ▼             ▼             ▼
-                                 │  yearProgress   progressBar    message
+                                 │  yearProgress  progressImage   message
                                  │         └─────────────┬─────────────┘
                                  ▼                       ▼
-                          xClient.createPost()    composed text
-                          (dry-run or future OAuth 1.0a POST)
+                          xClient.createPost()   text + PNG
+                          (dry-run, or upload + post via OAuth 1.0a)
 ```
 
 Small, side-effect-light modules for easy tests and host swaps.
@@ -118,13 +121,11 @@ Round to **two decimals** (e.g. `75.34`); label with `toFixed(2)`. Year from `no
 
 ## Progress-bar design
 
-| Setting | Default | Notes |
-|---------|---------|--------|
-| Length | `20` | `config/default.json` |
-| Filled | `█` | U+2588 FULL BLOCK |
-| Empty | `░` | U+2591 LIGHT SHADE |
+A 1200×240 PNG: near-black background, yellow frame, a white **“<YEAR> Progress Bar”** label on a black tab that breaks the top border, and a 1080 px bar inside — yellow fill from the left, white remainder.
 
-Filled count: `round((percent / 100) * length)` using the **same** rounded percent as the label. Example at 50%, length 20: `██████████░░░░░░░░░░`. See `src/progressBar.js`.
+Fill width: `round(1080 × percent / 100)` px, using the **same** rounded percent as the post text. The year comes from the same timezone logic.
+
+Zero dependencies and identical on every OS: `src/png.js` encodes the PNG with `node:zlib`, and the label is drawn from pre-rendered Poppins ExtraBold glyphs in `assets/glyphs.json` (SIL OFL 1.1, see `assets/fonts/Poppins-OFL.txt`). To change the font, run `scripts/build-glyphs.py` (Pillow, dev only).
 
 ---
 
@@ -142,15 +143,16 @@ Motivational, brief, encouraging. Templates in `config/messages.json` (default: 
 
 | Item | Detail |
 |------|--------|
-| Endpoint | `POST https://api.x.com/2/tweets` |
+| Endpoints | `POST https://api.x.com/2/media/upload` (image), then `POST https://api.x.com/2/tweets` |
 | Auth | **User context** — OAuth 1.0a (API key/secret + access token/secret) **or** OAuth 2.0 Authorization Code with PKCE |
 | App-only bearer | **Cannot** create posts |
-| Body | JSON with at least `text` |
+| Upload body | JSON `{"media": "<base64 PNG>", "media_category": "tweet_image"}` (≤ 5 MB); returns `data.id` |
+| Post body | JSON `{"text": "…", "media": {"media_ids": ["<id>"]}}` |
 | App setup | Developer account → Project → App with **read and write** |
 
-Docs: [Manage Posts quickstart](https://docs.x.com/x-api/posts/manage-tweets/quickstart) · [Developer Portal](https://developer.x.com/)
+Docs: [Upload Media](https://docs.x.com/x-api/media/upload-media) · [Create Post](https://docs.x.com/x-api/posts/create-post) · [Developer Portal](https://developer.x.com/)
 
-**Status: implemented.** `src/xClient.js` signs requests with OAuth 1.0a HMAC-SHA1 (`node:crypto`, no dependencies) and sends `{"text"}` via `fetch`. Posts over 280 characters are rejected before sending. On success it logs the post id. On `429` it logs when the limit resets (`x-rate-limit-reset`) and retries once only if that's within ~60 s; otherwise it exits nonzero.
+**Status: implemented.** `src/xClient.js` signs both requests with OAuth 1.0a HMAC-SHA1 (`node:crypto`, no dependencies; JSON bodies aren't part of the signature) and sends them via `fetch`. Posts over 280 characters are rejected before sending. If the image upload fails, nothing is posted and the run exits nonzero. On success it logs the post id. On `429` it logs when the limit resets (`x-rate-limit-reset`) and retries once only if that's within ~60 s; otherwise it exits nonzero.
 
 **For a live bot:**
 - Guard against double-fire (“already posted today”)
@@ -180,7 +182,6 @@ See `.env.example`. Do not commit real credentials.
 |---------|--------|
 | Posting frequency / cron hint | `config/default.json` → `posting` |
 | Timezone (year bounds) | `config/default.json` → `posting.timezone`; overridden by `BOT_TIMEZONE` |
-| Bar length / characters | `config/default.json` → `progressBar` |
 | Dry-run default | `config/default.json` → `dryRun` and `DRY_RUN` |
 | Motivational lines | `config/messages.json` |
 
@@ -204,14 +205,13 @@ Requires **Node.js 18+**.
 git clone https://github.com/dyarawilliams/yearinpercent.git
 cd yearinpercent
 cp .env.example .env   # leave DRY_RUN=true
-npm install
 npm test
 npm run dry-run        # node src/index.js --dry-run (works on macOS, Linux, Windows)
 ```
 
-`--dry-run` forces dry-run regardless of `DRY_RUN`, with no network call to X. No runtime dependencies.
+Dry-run prints the post text and saves the image to `out/progress.png` (gitignored); open it to preview. `--dry-run` forces dry-run regardless of `DRY_RUN`, with no network call to X. No runtime dependencies, so no `npm install` needed.
 
-**Real test post:** put your four `X_*` keys in `.env` (loaded automatically; existing env vars win), then run `npm run post` (`node src/index.js --live`). It prints the new post id. `--dry-run` still wins if both flags are passed.
+**Real test post:** put your four `X_*` keys in `.env` (loaded automatically; existing env vars win), then run `npm run post` (`node src/index.js --live`). It uploads the image, posts, and prints the new post id. `--dry-run` still wins if both flags are passed.
 
 ---
 
@@ -224,11 +224,11 @@ npm test
 | Area | Cases |
 |------|--------|
 | Year progress | Leap vs non-leap; mid-year; Jan 1 00:00 → `0.00%`; last moment of Dec 31 → `100.00%`; 1 ms before the 100% window → `99.99%`; same instant in `America/New_York` vs `UTC`; `BOT_TIMEZONE` override; no hard-coded year |
-| Progress bar | Empty / full / mid; custom chars; clamp; length vs percent |
+| Progress image | 1200×240 PNG; fill boundary pixels at 86% and 37.42%; 0% / 100%; frame, tab and label |
 | Messages | Load templates; deterministic pick with injected RNG; empty fallback |
-| Compose | Headline + bar + message; percent in text |
-| API / auth | OAuth signature vs. documented example; missing secrets; dry-run never calls fetch; success id; 401; 429 (no retry / one bounded retry); 500; text > 280 |
-| Dry-run | `--dry-run` flag forces dry-run even with `DRY_RUN=false`; prints only |
+| Compose | Headline + message; percent once; no text bar |
+| API / auth | OAuth signature vs. documented example; missing secrets; dry-run never calls fetch; success id; image upload request shape + `media_ids`; upload failure never posts; 401; 429 (no retry / one bounded retry); 500; text > 280 |
+| Dry-run | `--dry-run` flag forces dry-run even with `DRY_RUN=false`; prints text, writes `out/progress.png` |
 
 ### Error handling
 
@@ -237,6 +237,7 @@ npm test
 | Missing OAuth secrets (live) | Throw listing missing env var names |
 | `DRY_RUN=true` | Never call X; print composed post |
 | Text > 280 characters | Throw before sending |
+| Image upload fails / no media id | Throw; post is not created |
 | HTTP 401/403 | Auth error with hint: Read and write permission, regenerate access token |
 | HTTP 429 | Log reset time; one retry only if reset ≤ ~60 s, else exit nonzero |
 | Other 4xx/5xx | Log status + response body (never headers/secrets); exit nonzero |
@@ -264,17 +265,23 @@ Never log raw tokens or full `.env` contents.
 yearinpercent/
   README.md  LICENSE  .gitignore  .env.example  package.json
   config/
-    default.json          # frequency, bar, timezone, dryRun
+    default.json          # frequency, timezone, dryRun
     messages.json         # motivational templates
   src/
     index.js              # entry — dry-run default, --live posts
     yearProgress.js       # year % calculation
-    progressBar.js        # █ / ░ bar
+    progressImage.js      # PNG progress bar
+    png.js                # tiny PNG encoder
     message.js            # template picker
-    compose.js            # wires percent + bar + message
+    compose.js            # wires percent + message
     loadEnv.js            # Tiny .env loader
-    xClient.js            # OAuth 1.0a X posting
+    xClient.js            # OAuth 1.0a media upload + posting
+  assets/
+    glyphs.json           # pre-rendered label glyphs
+    fonts/Poppins-OFL.txt # font license
+  scripts/build-glyphs.py # dev-only glyph builder
   tests/                  # unit tests incl. mocked X API
+  docs/example-progress.png
   docs/github-actions/
     post.yml.example      # ready workflow — copy to .github/workflows/post.yml
 ```
@@ -298,6 +305,3 @@ Contributions are licensed under MIT.
 
 **Author / maintainer:** **D'yara Williams** · GitHub: [dyarawilliams](https://github.com/dyarawilliams)
 
----
-
-*Blueprint scaffold — dry-run works today; live X posting is a follow-up once Developer Portal credentials and write permissions are in place.*
